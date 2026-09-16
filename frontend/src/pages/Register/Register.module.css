@@ -1,0 +1,25 @@
+.page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: radial-gradient(circle at 50% -10%, #2a2450 0%, #0d0b18 55%, #0a0912 100%);
+    position: relative;
+    overflow: hidden;
+    background-color: black;
+}
+
+.page::before {
+    content: "";
+    position: absolute;
+    top: -20%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 60vw;
+    height: 60vw;
+    max-width: 700px;
+    max-height: 700px;
+    background: radial-gradient(circle, rgba(124, 92, 255, 0.25) 0%, rgba(124, 92, 255, 0) 70%);
+    pointer-events: none;
+}
