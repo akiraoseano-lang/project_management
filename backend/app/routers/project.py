@@ -10,17 +10,21 @@ from app.models.workspace import Workspace
 from app.models.project import Project
 from app.models.project_member import ProjectMember
 from app.models.project_request import ProjectRequest
-from app.schemas.project import ProjectCreate, ProjectResponse
+from app.schemas.project import ProjectCreate, ProjectResponse, ProjectUpdate
 from app.schemas.project_member import ProjectMemberResponse
 from app.utils.workspace_permission import get_workspace_member
 
 router = APIRouter(
+    prefix="/projects",
+    tags=["Projects"]
+)
+
+workspace_project_router = APIRouter(
     prefix="/workspaces",
     tags=["Projects"]
 )
 
-
-@router.post(
+@workspace_project_router.post(
     "/{workspace_id}/projects",
     response_model=ProjectResponse,
     status_code=status.HTTP_201_CREATED
@@ -114,7 +118,7 @@ def create_project(
     return project
 
 @router.post(
-    "/projects/{project_id}/join",
+    "/{project_id}/join",
     status_code=status.HTTP_201_CREATED
 )
 def request_join_project(
@@ -236,6 +240,51 @@ def get_project(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Project is not active"
         )
+
+    return project
+
+@router.get(
+        "/{workspace_id}/projects",
+        response_model=list[ProjectResponse],
+        status_code=status.HTTP_200_OK
+)
+def get_workspace_projects(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    workspace = db.scalar(
+        select(Workspace).where(
+            Workspace.id == workspace_id
+        )
+    )
+
+    if not workspace:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Workspace not found"
+        )
+
+    workspace_member = get_workspace_member(
+        db=db,
+        workspace_id=workspace_id,
+        user_id=current_user.id
+    )
+
+    if not workspace_member:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not a member of this workspace"
+        )
+
+    project = db.scalars(
+        select(Project)
+        .where(
+            Project.workspace_id == workspace_id,
+            Project.status == "ACTIVE"
+        )
+        .order_by(Project.created_at.desc())
+    ).all()
 
     return project
 
@@ -374,4 +423,115 @@ def remove_project_member(
         "message": "Project member removed",
         "project_id": project_id,
         "user_id": user_id
+    }
+
+@router.patch(
+    "/{project_id}",
+    response_model=ProjectResponse,
+    status_code=status.HTTP_200_OK
+)
+def update_project(
+    project_id: int,
+    project_data: ProjectUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    project = db.scalar(
+        select(Project).where(
+            Project.id == project_id
+        )
+    )
+
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found"
+        )
+
+    if project.status != "ACTIVE":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Project is not active"
+        )
+
+    workspace_member = get_workspace_member(
+        db=db,
+        workspace_id=project.workspace_id,
+        user_id=current_user.id
+    )
+
+    if not workspace_member:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not a member of this workspace"
+        )
+
+    if project.owner_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only project owner can update the project"
+        )
+
+    if project_data.name is not None:
+        project.name = project_data.name
+
+    if project_data.description is not None:
+        project.description = project_data.description
+
+    db.commit()
+    db.refresh(project)
+
+    return project
+
+@router.delete(
+    "/{project_id}",
+    status_code=status.HTTP_200_OK
+)
+def delete_project(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    project = db.scalar(
+        select(Project).where(
+            Project.id == project_id
+        )
+    )
+
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found"
+        )
+
+    if project.status != "ACTIVE":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Project is not active"
+        )
+
+    workspace_member = get_workspace_member(
+        db=db,
+        workspace_id=project.workspace_id,
+        user_id=current_user.id
+    )
+
+    if not workspace_member:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not a member of this workspace"
+        )
+
+    if project.owner_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only project owner can delete the project"
+        )
+
+    db.delete(project)
+    db.commit()
+
+    return {
+        "message": "Project deleted successfully",
+        "project_id": project_id
     }

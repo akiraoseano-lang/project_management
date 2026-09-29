@@ -41,6 +41,12 @@ def create_task(
             detail="Project not found"
         )
 
+    if project.status != "ACTIVE":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Project is not active"
+        )
+
     workspace_member = get_workspace_member(
         db=db,
         workspace_id=project.workspace_id,
@@ -135,6 +141,19 @@ def get_project_tasks(
             detail="You are not a member of this workspace"
         )
 
+    project_member = db.scalar(
+        select(ProjectMember).where(
+            ProjectMember.project_id == project.id,
+            ProjectMember.user_id == current_user.id
+        )
+    )
+
+    if not project_member:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not a member of this project"
+        )
+
     tasks = db.scalars(
         select(Task)
         .where(Task.project_id == project_id)
@@ -187,6 +206,19 @@ def get_tasks(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You are not a member of this workspace"
+        )
+
+    project_member = db.scalar(
+        select(ProjectMember).where(
+            ProjectMember.project_id == project.id,
+            ProjectMember.user_id == current_user.id
+        )
+    )
+
+    if not project_member:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not a member of this project"
         )
 
     if project.status != "ACTIVE":
@@ -252,58 +284,18 @@ def update_task(
 
     is_workspace_owner = workspace_member.role == "OWNER"
     is_project_owner = project.owner_id == current_user.id
-    is_assignee = task.assigned_to == current_user.id
 
-    if not is_workspace_owner and not is_project_owner and not is_assignee:
+    if not is_workspace_owner and not is_project_owner:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to update this task"
         )
-
-    if is_assignee and not is_workspace_owner and not is_project_owner:
-        if (
-            task_data.title is not None
-            or task_data.description is not None
-            or task_data.assigned_to is not None
-        ):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Assignee can only update task status"
-            )
-
-    if task_data.assigned_to is not None:
-        target_member = db.scalar(
-            select(ProjectMember).where(
-                ProjectMember.project_id == project.id,
-                ProjectMember.user_id == task_data.assigned_to
-            )
-        )
-
-        if not target_member:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Assigned user is not a member of this project"
-            )
 
     if task_data.title is not None:
         task.title = task_data.title
 
     if task_data.description is not None:
         task.description = task_data.description
-
-    if task_data.assigned_to is not None:
-        task.assigned_to = task_data.assigned_to
-
-    if task_data.status is not None:
-        allowed_statuses = ["TODO", "IN_PROGRESS", "DONE"]
-
-        if task_data.status not in allowed_statuses:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid task status"
-            )
-
-        task.status = task_data.status
 
     db.commit()
     db.refresh(task)
@@ -366,7 +358,7 @@ def create_task_checklist(
     if workspace_member.role != "OWNER" and project.owner_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only workspace owner or project can create checklist"
+            detail="Only workspace owner or project owner can create checklist"
         )
 
     checklist = TaskCheckList(
@@ -382,7 +374,7 @@ def create_task_checklist(
     return checklist
 
 @router.get(
-    "tasks/{task_id}/checklist",
+    "/tasks/{task_id}/checklist",
     response_model=list[TaskChecklistResponse],
     status_code=status.HTTP_200_OK
 )
@@ -628,6 +620,12 @@ def claim_task(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Task is already assigned"
+        )
+
+    if task.status == "DONE":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Completed task cannot be claimed"
         )
 
     task.assigned_to = current_user.id

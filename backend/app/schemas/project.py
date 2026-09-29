@@ -18,3 +18,7 @@ class ProjectResponse(BaseModel):
     status: str
     created_at: datetime
     updated_at: datetime
+
+class ProjectUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
