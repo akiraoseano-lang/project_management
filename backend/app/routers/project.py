@@ -13,6 +13,7 @@ from app.models.project_request import ProjectRequest
 from app.schemas.project import ProjectCreate, ProjectResponse, ProjectUpdate
 from app.schemas.project_member import ProjectMemberResponse
 from app.utils.workspace_permission import get_workspace_member
+from app.models.task import Task
 
 router = APIRouter(
     prefix="/projects",
@@ -416,6 +417,17 @@ def remove_project_member(
             detail="Project member not found"
         )
 
+    tasks = db.scalars(
+        select(Task).where(
+            Task.project_id == project_id,
+            Task.assigned_to == user_id
+        )
+    )
+
+    for task in tasks:
+        task.assigned_to = None
+        task.status = "TODO"
+
     db.delete(project_member)
     db.commit()
 
@@ -534,4 +546,70 @@ def delete_project(
     return {
         "message": "Project deleted successfully",
         "project_id": project_id
+    }
+
+@router.delete(
+    "/{project_id}/leave",
+    status_code=status.HTTP_200_OK
+)
+def leave_project(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    project = db.scalar(
+        select(Project).where(
+            Project.id == project_id
+        )
+    )
+
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found"
+        )
+
+    if project.status != "ACTIVE":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Project is not active"
+        )
+
+    project_member = db.scalar(
+        select(ProjectMember).where(
+            ProjectMember.project_id == project_id,
+            ProjectMember.user_id == current_user.id
+        )
+    )
+
+    if not project_member:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You are not a member of this project"
+        )
+
+    if project.owner_id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Project owner cannot leave the project"
+        )
+
+    tasks = db.scalars(
+        select(Task).where(
+            Task.project_id == project_id,
+            Task.assigned_to == current_user.id
+        )
+    ).all()
+
+    for task in tasks:
+        task.assigned_to = None
+        task.status = "TODO"
+
+    db.delete(project_member)
+    db.commit()
+
+    return {
+        "message": "You have left the project",
+        "project_id": project_id,
+        "user_id": current_user.id
     }

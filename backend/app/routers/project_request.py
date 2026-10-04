@@ -86,7 +86,7 @@ def approve_project_request(
     project_member = db.scalar(
         select(ProjectMember).where(
             ProjectMember.project_id == project.id,
-            ProjectMember.user_id == request.reviewed_by
+            ProjectMember.user_id == request.requested_by
         )
     )
 
@@ -314,6 +314,18 @@ def approve_join_request(
             detail="Only project owner can approve join requests"
         )
 
+    workspace_member = get_workspace_member(
+        db=db,
+        workspace_id=project.workspace_id,
+        user_id=current_user.id
+    )
+
+    if not workspace_member:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Requester is no longer a member of this workspace"
+        )
+
     project_member = db.scalar(
         select(ProjectMember).where(
             ProjectMember.project_id == project.id,
@@ -344,7 +356,7 @@ def approve_join_request(
     return {
         "message": "Project join request approved",
         "project_id": project.id,
-        "user_id": request.reviewed_by,
+        "user_id": request.requested_by,
         "status": request.status
     }
 
@@ -391,6 +403,12 @@ def reject_join_request(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Project not found"
+        )
+
+    if project.status != "ACTIVE":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Project is not active"
         )
 
     if project.owner_id != current_user.id:
