@@ -11,6 +11,7 @@ from app.routers.project import router as project_router
 from app.routers.project import workspace_project_router 
 from app.routers.project_request import router as project_request_router
 from app.routers.project_member import router as project_member_router
+from app.routers.user import router as user_router
 from app.security.header import SecurityHeadersMiddleware 
 
 app = FastAPI(
@@ -53,6 +54,7 @@ app.include_router(workspace_project_router)
 app.include_router(project_router)
 app.include_router(project_request_router)
 app.include_router(project_member_router)
+app.include_router(user_router)
 
 @app.get("/")
 def root():
