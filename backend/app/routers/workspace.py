@@ -12,6 +12,9 @@ from app.schemas.workspace import WorkspaceCreate, WorkspaceResponse, WorkspaceU
 from app.schemas.workspace_member import WorkspaceMemberResponse, AddWorkspaceMemberRequest
 from app.schemas.workspace_request import WorkspaceRequestCreate, WorkspaceRequestResponse
 from app.dependencies.auth import get_current_user
+from app.models.project import Project
+from app.models.project_member import ProjectMember
+from app.models.task import Task
 
 from app.utils.workspace_permission import get_workspace_member
 
@@ -353,13 +356,52 @@ def leave_workspace(
             detail="You are not a member of this workspace"
         )
 
+    owned_projects = db.scalars(
+        select(Project).where(
+            Project.workspace_id == workspace_id,
+            Project.owner_id == current_user.id
+        )
+    ).all()
+
+    if owned_projects:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You cannot leave the workspace while you are a project owner"
+        )
+
+    assigned_tasks = db.scalars(
+        select(Task)
+        .join(Project, Task.project_id == Project.id)
+        .where(
+            Project.workspace_id == workspace_id,
+            Task.assigned_to == current_user.id
+        )
+    ).all()
+
+    for task in assigned_tasks:
+        task.assigned_to = None
+        task.status = "TODO"
+
+    project_memberships = db.scalars(
+        select(ProjectMember)
+        .join(Project, ProjectMember.project_id == Project.id)
+        .where(
+            Project.workspace_id == workspace_id,
+            ProjectMember.user_id == current_user.id
+        )
+    ).all()
+
+    for project_member in project_memberships:
+        db.delete(project_member)
+
     db.delete(membership)
+
     db.commit()
 
     return {
         "message": "You have left the workspace successfully"
     }
-
+    
 @router.delete(
     "/{workspace_id}/members/{user_id}",
     status_code=status.HTTP_200_OK
@@ -406,7 +448,46 @@ def remove_workspace_member(
             detail="User is not a member of this workspace"
         )
 
+    owned_projects = db.scalars(
+        select(Project).where(
+            Project.workspace_id == workspace_id,
+            Project.owner_id == user_id
+        )
+    ).all()
+
+    if owned_projects:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This member cannot be removed while they are a project owner"
+        )
+
+    assigned_tasks = db.scalars(
+        select(Task)
+        .join(Project, Task.project_id == Project.id)
+        .where(
+            Project.workspace_id == workspace_id,
+            Task.assigned_to == user_id
+        )
+    ).all()
+
+    for task in assigned_tasks:
+        task.assigned_to = None
+        task.status = "TODO"
+
+    project_memberships = db.scalars(
+        select(ProjectMember)
+        .join(Project, ProjectMember.project_id == Project.id)
+        .where(
+            Project.workspace_id == workspace_id,
+            ProjectMember.user_id == user_id
+        )
+    ).all()
+
+    for project_member in project_memberships:
+        db.delete(project_member)
+
     db.delete(member)
+
     db.commit()
 
     return {
@@ -441,6 +522,12 @@ def create_workspace_request(
         workspace_id=workspace_id,
         user_id=current_user.id
     )
+
+    if not member:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not a member of this workspace"
+        )
 
     if member.role != "ADMIN":
         raise HTTPException(
@@ -490,6 +577,12 @@ def get_workspace_requests(
         user_id=current_user.id
     )
 
+    if not member:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not a member of this workspace"
+        )
+
     if member.role != "OWNER":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -536,6 +629,12 @@ def approve_workspace_request(
         user_id=current_user.id
     )
 
+    if not member:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not a member of this workspace"
+        )
+
     if member.role != "OWNER":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -576,17 +675,49 @@ def approve_workspace_request(
                 detail="Target user is not member of this workspace"
             )
 
-        if not target_member:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Target user is not a member of this workspace"
-            )
-
         if target_member.role == "OWNER":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Workspace owner cannot be removed"
             )
+
+        owned_projects = db.scalars(
+            select(Project).where(
+                Project.workspace_id == workspace_id,
+                Project.owner_id == workspace_request.target_user_id
+            )
+        ).all()
+
+        if owned_projects:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This member cannot be removed while they are a project owner"
+            )
+
+        assigned_tasks = db.scalars(
+            select(Task)
+            .join(Project, Task.project_id == Project.id)
+            .where(
+                Project.workspace_id == workspace_id,
+                Task.assigned_to == workspace_request.target_user_id
+            )
+        ).all()
+
+        for task in assigned_tasks:
+            task.assigned_to = None
+            task.status = "TODO"
+
+        project_memberships = db.scalars(
+            select(ProjectMember)
+            .join(Project, ProjectMember.project_id == Project.id)
+            .where(
+                Project.workspace_id == workspace_id,
+                ProjectMember.user_id == workspace_request.target_user_id
+            )
+        ).all()
+
+        for project_member in project_memberships:
+            db.delete(project_member)
 
         db.delete(target_member)
 
@@ -698,6 +829,12 @@ def reject_workspace_request(
         workspace_id=workspace_id,
         user_id=current_user.id
     )
+
+    if not member:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not a member of this workspace"
+        )
 
     if member.role != "OWNER":
         raise HTTPException(

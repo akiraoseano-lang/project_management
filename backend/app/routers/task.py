@@ -99,7 +99,7 @@ def create_task(
         description=task_data.description,
         created_by=current_user.id,
         assigned_to=task_data.assigned_to,
-        status="TODO"
+        status="IN_PROGRESS" if task_data.assigned_to is not None else "TODO"
     )
 
     db.add(task)
