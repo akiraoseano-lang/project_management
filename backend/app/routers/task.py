@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -10,8 +10,10 @@ from app.models.task import Task
 from app.models.task_checklist import TaskCheckList
 from app.schemas.task_checklist import TaskChecklistCreate, TaskChecklistResponse
 from app.schemas.task import TaskCreate, TaskResponse, TaskUpdate
+from app.schemas.pagination import PaginatedResponse
 from app.dependencies.auth import get_current_user
 from app.utils.workspace_permission import get_workspace_member
+from app.utils.pagination import get_pagination
 
 router = APIRouter(
     prefix="/projects",
@@ -110,10 +112,13 @@ def create_task(
 
 @router.get(
     "/{project_id}/tasks",
-    response_model=list[TaskResponse]
+    response_model=PaginatedResponse[TaskResponse],
+    status_code=status.HTTP_200_OK
 )
 def get_project_tasks(
     project_id: int,
+    page: int = 1,
+    page_size: int = 20,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -127,6 +132,12 @@ def get_project_tasks(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Project not found"
+        )
+
+    if project.status != "ACTIVE":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Project is not active"
         )
 
     workspace_member = get_workspace_member(
@@ -143,7 +154,7 @@ def get_project_tasks(
 
     project_member = db.scalar(
         select(ProjectMember).where(
-            ProjectMember.project_id == project.id,
+            ProjectMember.project_id == project_id,
             ProjectMember.user_id == current_user.id
         )
     )
@@ -154,13 +165,38 @@ def get_project_tasks(
             detail="You are not a member of this project"
         )
 
+    total = db.scalar(
+        select(func.count(Task.id))
+        .where(
+            Task.project_id == project_id
+        )
+    ) or 0
+
+    offset, total_pages = get_pagination(
+        page=page,
+        page_size=page_size,
+        total=total
+    )
+
     tasks = db.scalars(
         select(Task)
-        .where(Task.project_id == project_id)
-        .order_by(Task.created_at.desc())
+        .where(
+            Task.project_id == project_id
+        )
+        .order_by(
+            Task.created_at.desc()
+        )
+        .offset(offset)
+        .limit(page_size)
     ).all()
 
-    return tasks
+    return {
+        "items": tasks,
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "total_pages": total_pages
+    }
 
 @router.get(
     "/tasks/{task_id}",

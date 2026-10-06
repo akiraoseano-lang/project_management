@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, status, HTTPException
-from sqlalchemy import select 
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session, joinedload
 from datetime import datetime, timezone
 
@@ -11,10 +11,12 @@ from app.models.workspace_request import WorkspaceRequest
 from app.schemas.workspace import WorkspaceCreate, WorkspaceResponse, WorkspaceUpdate
 from app.schemas.workspace_member import WorkspaceMemberResponse, AddWorkspaceMemberRequest
 from app.schemas.workspace_request import WorkspaceRequestCreate, WorkspaceRequestResponse
+from app.schemas.pagination import PaginatedResponse
 from app.dependencies.auth import get_current_user
 from app.models.project import Project
 from app.models.project_member import ProjectMember
 from app.models.task import Task
+from app.utils.pagination import get_pagination
 
 from app.utils.workspace_permission import get_workspace_member
 
@@ -57,13 +59,30 @@ def create_workspace(
 
 @router.get(
     "",
-    response_model=list[WorkspaceResponse]
+    response_model=PaginatedResponse[WorkspaceResponse],
+    status_code=status.HTTP_200_OK
 )
 def get_workspaces(
+    page: int = 1,
+    page_size: int = 20,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    statement = (
+    total = db.scalar(
+        select(func.count(Workspace.id))
+        .join(WorkspaceMember)
+        .where(
+            WorkspaceMember.user_id == current_user.id
+        )
+    )
+
+    offset, total_pages = get_pagination(
+        page=page,
+        page_size=page_size,
+        total=total
+    )
+
+    workspaces = db.scalars(
         select(Workspace)
         .join(WorkspaceMember)
         .where(
@@ -72,13 +91,18 @@ def get_workspaces(
         .order_by(
             Workspace.created_at.desc()
         )
-    )
+        .offset(offset)
+        .limit(page_size)
+    ).all()
 
-    result = db.execute(statement)
+    return {
+        "items": workspaces,
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "total_pages": total_pages
+    }
 
-    workspaces = result.scalars().all()
-
-    return workspaces
 
 @router.get(
     "/{workspace_id}",
@@ -200,17 +224,16 @@ def delete_workspace(
 
 @router.get(
     "/{workspace_id}/members",
-    response_model=list[WorkspaceMemberResponse]
+    response_model=PaginatedResponse[WorkspaceMemberResponse]
 )
 def get_workspace_members(
     workspace_id: int,
+    page: int = 1,
+    page_size: int = 20,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    workspace = db.get(
-        Workspace,
-        workspace_id
-    )
+    workspace = db.get(Workspace, workspace_id)
 
     if workspace is None:
         raise HTTPException(
@@ -218,20 +241,33 @@ def get_workspace_members(
             detail="Workspace not found"
         )
 
-    membership = db.execute(
+    current_member = db.scalar(
         select(WorkspaceMember).where(
             WorkspaceMember.workspace_id == workspace_id,
             WorkspaceMember.user_id == current_user.id
         )
-    ).scalar_one_or_none()
+    )
 
-    if membership is None:
+    if current_member is None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You are not a member of this workspace"
         )
 
-    members = db.execute(
+    total = db.scalar(
+        select(func.count(WorkspaceMember.id))
+        .where(
+            WorkspaceMember.workspace_id == workspace_id
+        )
+    ) or 0
+
+    offset, total_pages = get_pagination(
+        page=page,
+        page_size=page_size,
+        total=total
+    )
+
+    members = db.scalars(
         select(WorkspaceMember)
         .options(
             joinedload(WorkspaceMember.user)
@@ -239,9 +275,20 @@ def get_workspace_members(
         .where(
             WorkspaceMember.workspace_id == workspace_id
         )
-    ).scalars().all()
+        .order_by(
+            WorkspaceMember.joined_at.desc()
+        )
+        .offset(offset)
+        .limit(page_size)
+    ).all()
 
-    return members
+    return {
+        "items": members,
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "total_pages": total_pages
+    }
 
 @router.post(
     "/{workspace_id}/members",
@@ -552,10 +599,13 @@ def create_workspace_request(
 
 @router.get(
     "/{workspace_id}/requests",
-    response_model=list[WorkspaceRequestResponse]
+    response_model=PaginatedResponse[WorkspaceRequestResponse],
+    status_code=status.HTTP_200_OK
 )
 def get_workspace_requests(
     workspace_id: int,
+    page: int = 1,
+    page_size: int = 20,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -586,8 +636,21 @@ def get_workspace_requests(
     if member.role != "OWNER":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only workpsace owner can view approval requests"
+            detail="Only workspace owner can view approval requests"
         )
+
+    total = db.scalar(
+        select(func.count(WorkspaceRequest.id))
+        .where(
+            WorkspaceRequest.workspace_id == workspace_id
+        )
+    ) or 0
+
+    offset, total_pages = get_pagination(
+        page=page,
+        page_size=page_size,
+        total=total
+    )
 
     requests = db.scalars(
         select(WorkspaceRequest)
@@ -597,9 +660,17 @@ def get_workspace_requests(
         .order_by(
             WorkspaceRequest.created_at.desc()
         )
+        .offset(offset)
+        .limit(page_size)
     ).all()
 
-    return requests
+    return {
+        "items": requests,
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "total_pages": total_pages
+    }
 
 @router.patch(
     "/{workspace_id}/requests/{request_id}/approve",

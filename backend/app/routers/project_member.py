@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -13,6 +13,9 @@ from app.schemas.project_member import (
     ProjectMemberCreate,
     ProjectMemberResponse,
 )
+from app.schemas.pagination import PaginatedResponse
+from app.utils.pagination import get_pagination
+from app.utils.workspace_permission import get_workspace_member
 
 router = APIRouter(
     prefix="/projects",
@@ -132,10 +135,13 @@ def add_project_member(
 
 @router.get(
     "/{project_id}/members",
-    response_model=list[ProjectMemberResponse]
+    response_model=PaginatedResponse[ProjectMemberResponse],
+    status_code=status.HTTP_200_OK
 )
 def get_project_members(
     project_id: int,
+    page: int = 1,
+    page_size: int = 20,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -145,32 +151,87 @@ def get_project_members(
         )
     )
 
-    if not project: 
+    if not project:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Project not found"
         )
 
-    workspace_member = db.scalar(
-        select(WorkspaceMember).where(
-            WorkspaceMember.workspace_id == project.workspace_id,
-            WorkspaceMember.user_id == current_user.id
+    if project.status != "ACTIVE":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Project is not active"
         )
+
+    workspace_member = get_workspace_member(
+        db=db,
+        workspace_id=project.workspace_id,
+        user_id=current_user.id
     )
 
     if not workspace_member:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You are not a member of this workspace"
+            detail="You are not member of this workspace"
         )
 
-    members = db.scalars(
-        select(ProjectMember).where(
+    total = db.scalar(
+        select(func.count(ProjectMember.id))
+        .where(
             ProjectMember.project_id == project_id
         )
+    ) or 0
+
+    offset, total_pages = get_pagination(
+        page=page,
+        page_size=page_size,
+        total=total
+    )
+
+    results = db.execute(
+        select(
+            ProjectMember.id,
+            ProjectMember.project_id,
+            User.id.label("user_id"),
+            User.name,
+            User.email,
+            ProjectMember.added_by,
+            ProjectMember.created_at
+        )
+        .join(
+            User,
+            User.id == ProjectMember.user_id
+        )
+        .where(
+            ProjectMember.project_id == project_id
+        )
+        .order_by(
+            ProjectMember.created_at.asc()
+        )
+        .offset(offset)
+        .limit(page_size)
     ).all()
 
-    return members
+    members = [
+        {
+            "id": row.id,
+            "project_id": row.project_id,
+            "user_id": row.user_id,
+            "name": row.name,
+            "email": row.email,
+            "added_by": row.added_by,
+            "created_at": row.created_at
+        }
+        for row in results
+    ]
+
+    return {
+        "items": members,
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "total_pages": total_pages
+    }
 
 @router.delete(
     "/{project_id}/members/{user_id}",
