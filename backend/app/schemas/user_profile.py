@@ -18,6 +18,7 @@ class UserProfileResponse(BaseModel):
     email: str
 
     profile_photo_url: str | None
+    profile_photo_signed_url: str | None
     phone_number: str | None
     bio: str | None
     description: str | None
@@ -26,3 +27,23 @@ class UserProfileResponse(BaseModel):
     linkedin_url: str | None
     instagram_url: str | None
     website_url: str | None
+
+class ProfilePhotoUploadResponse(BaseModel):
+    path: str
+    token: str
+    signed_url: str
+
+class MemberSearchItem(BaseModel):
+    user_id: int
+    name: str
+    email: str
+    profile_photo_url: str | None
+    profile_photo_signed_url: str | None
+    bio: str | None
+
+class MemberSearchResponse(BaseModel):
+    items: list[MemberSearchItem]
+    total: int
+    page: int
+    limit: int
+    total_pages: int

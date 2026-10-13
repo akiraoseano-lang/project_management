@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     DISCORD_CLIENT_SECRET: str
     DISCORD_REDIRECT_URI: str
 
+    SUPABASE_URL: str
+    SUPABASE_SECRET_KEY: str
+    SUPABASE_STORAGE_BUCKET: str
+
     model_config = SettingsConfigDict(
         env_file=".env",
         case_sensitive=True

@@ -10,6 +10,7 @@ import PublicRoute from "./routes/PublicRoute/PublicRoute";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
+import Profile from "./components/profile";
 
 const App = () => {
   return (
@@ -40,6 +41,13 @@ const App = () => {
         <Route
           path="/dashboard"
           element={<Dashboard />}
+        />
+      </Route>
+
+      <Route element={<ProtectedRoute />}>
+        <Route
+          path="/profile"
+          element={<Profile />}
         />
       </Route>
     </Routes>
