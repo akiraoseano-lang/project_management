@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, status, HTTPException
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_
 from sqlalchemy.orm import Session, joinedload
 from datetime import datetime, timezone
 
@@ -103,6 +103,60 @@ def get_workspaces(
         "total_pages": total_pages
     }
 
+@router.get(
+    "/search",
+    response_model=PaginatedResponse[WorkspaceResponse],
+    status_code=status.HTTP_200_OK
+)
+def search_workspaces(
+    q: str,
+    page: int = 1,
+    page_size: int = 20,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    search_term = q.strip()
+
+    if not search_term:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Search query cannot be empty"
+        )
+
+    page = max(page, 1)
+    page_size = max(1, min(page_size, 100))
+    search_pattern = f"%{search_term}%"
+
+    conditions = or_(
+        Workspace.name.ilike(search_pattern),
+        Workspace.description.ilike(search_pattern)
+    )
+
+    total = db.scalar(
+        select(func.count(Workspace.id)).where(conditions)
+    ) or 0
+
+    offset, total_pages = get_pagination(
+        page=page,
+        page_size=page_size,
+        total=total
+    )
+
+    workspaces = db.scalars(
+        select(Workspace)
+        .where(conditions)
+        .order_by(Workspace.created_at.desc())
+        .offset(offset)
+        .limit(page_size)
+    ).all()
+
+    return {
+        "items": workspaces,
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "total_pages": total_pages
+    }
 
 @router.get(
     "/{workspace_id}",
@@ -940,3 +994,4 @@ def reject_workspace_request(
     db.refresh(workspace_request)
 
     return workspace_request 
+

@@ -65,4 +65,4 @@ class Workspace(Base):
         "Project",
         back_populates="workspace",
         cascade="all, delete-orphan"
-    )
+    )  

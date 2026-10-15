@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -8,6 +8,8 @@ from app.models.project import Project
 from app.models.project_member import ProjectMember
 from app.models.task import Task
 from app.models.task_checklist import TaskCheckList
+from app.models.workspace import Workspace
+from app.models.workspace_member import WorkspaceMember
 from app.schemas.task_checklist import TaskChecklistCreate, TaskChecklistResponse
 from app.schemas.task import TaskCreate, TaskResponse, TaskUpdate
 from app.schemas.pagination import PaginatedResponse
@@ -17,6 +19,11 @@ from app.utils.pagination import get_pagination
 
 router = APIRouter(
     prefix="/projects",
+    tags=["Tasks"]
+)
+
+workspace_task_router = APIRouter(
+    prefix="/workspaces",
     tags=["Tasks"]
 )
 
@@ -750,3 +757,84 @@ def unclaim_task(
     db.refresh(task)
 
     return task
+
+@workspace_task_router.get(
+    "/{workspace_id}/tasks/search",
+    response_model=PaginatedResponse[TaskResponse],
+    status_code=status.HTTP_200_OK
+)
+def search_workspace_tasks(
+    workspace_id: int,
+    q: str,
+    page: int = 1,
+    page_size: int = 20,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    workspace = db.scalar(
+        select(Workspace).where(
+            Workspace.id == workspace_id
+        )
+    )
+
+    if not workspace:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Workspace not found"
+        )
+
+    get_workspace_member(
+        db=db,
+        workspace_id=workspace_id,
+        user_id=current_user.id
+    )
+
+    search_pattern = f"%{q.strip()}%"
+
+    base_query = (
+        select(Task)
+        .join(Project, Task.project_id == Project.id)
+        .join(
+            ProjectMember,
+            ProjectMember.project_id == Project.id
+        )
+        .where(
+            Project.workspace_id == workspace_id,
+            Project.status == "ACTIVE",
+            ProjectMember.user_id == current_user.id,
+            or_(
+                Task.title.ilike(search_pattern),
+                Task.description.ilike(search_pattern)
+            )
+        )
+    )
+
+    total = db.scalar(
+        select(func.count()).select_from(
+            base_query.subquery()
+        )
+    ) or 0
+
+    offset, total_pages = get_pagination(
+        page=page,
+        page_size=page_size,
+        total=total
+    )
+
+    page = max(page, 1)
+    page_size = max(1, min(page_size, 100))
+
+    tasks = db.scalars(
+        base_query
+        .order_by(Task.created_at.desc())
+        .offset(offset)
+        .limit(page_size)
+    ).all()
+
+    return {
+        "items": tasks,
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "total_pages": total_pages
+    }

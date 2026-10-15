@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -20,6 +20,11 @@ from app.models.task import Task
 router = APIRouter(
     prefix="/projects",
     tags=["Projects"]
+)
+
+workspace_task_router = APIRouter(
+    prefix="/workspaces",
+    tags=["Tasks"]
 )
 
 workspace_project_router = APIRouter(
@@ -565,4 +570,82 @@ def leave_project(
         "message": "You have left the project",
         "project_id": project_id,
         "user_id": current_user.id
+    }
+
+@workspace_project_router.get(
+    "/{workspace_id}/projects/search",
+    response_model=PaginatedResponse[ProjectResponse],
+    status_code=status.HTTP_200_OK
+)
+def search_workspace_projects(
+    workspace_id: int,
+    q: str,
+    page: int = 1,
+    page_size: int = 20,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    workspace = db.scalar(
+        select(Workspace).where(
+            Workspace.id == workspace_id
+        )
+    )
+
+    if not workspace:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Workspace not found"
+        )
+
+    get_workspace_member(
+        db=db,
+        workspace_id=workspace_id,
+        user_id=current_user.id
+    )
+
+    search_term = q.strip()
+
+    if not search_term:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Search query cannot be empty"
+        )
+
+    page = max(page, 1)
+    page_size = max(1, min(page_size, 100))
+    search_pattern = f"%{search_term}%"
+
+    conditions = (
+        Project.workspace_id == workspace_id,
+        Project.status == "ACTIVE",
+        or_(
+            Project.name.ilike(search_pattern),
+            Project.description.ilike(search_pattern)
+        )
+    )
+
+    total = db.scalar(
+        select(func.count(Project.id)).where(*conditions)
+    ) or 0
+
+    offset, total_pages = get_pagination(
+        page=page,
+        page_size=page_size,
+        total=total
+    )
+
+    projects = db.scalars(
+        select(Project)
+        .where(*conditions)
+        .order_by(Project.created_at.desc())
+        .offset(offset)
+        .limit(page_size)
+    ).all()
+
+    return {
+        "items": projects,
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "total_pages": total_pages
     }

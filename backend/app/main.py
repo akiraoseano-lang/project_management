@@ -7,6 +7,7 @@ from app.core.config import settings
 from app.routers.auth import router as auth_router
 from app.routers.workspace import router as workspace_router
 from app.routers.task import router as task_router
+from app.routers.task import workspace_task_router as task_search_router
 from app.routers.project import router as project_router
 from app.routers.project import workspace_project_router 
 from app.routers.project_request import router as project_request_router
@@ -50,6 +51,7 @@ app.add_middleware(SecurityHeadersMiddleware)
 app.include_router(auth_router)
 app.include_router(workspace_router)
 app.include_router(task_router)
+app.include_router(task_search_router)
 app.include_router(workspace_project_router)
 app.include_router(project_router)
 app.include_router(project_request_router)
