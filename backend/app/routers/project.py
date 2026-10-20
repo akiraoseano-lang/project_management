@@ -11,7 +11,6 @@ from app.models.project import Project
 from app.models.project_member import ProjectMember
 from app.models.project_request import ProjectRequest
 from app.schemas.project import ProjectCreate, ProjectResponse, ProjectUpdate
-from app.schemas.project_member import ProjectMemberResponse
 from app.schemas.pagination import PaginatedResponse
 from app.utils.workspace_permission import get_workspace_member
 from app.utils.pagination import get_pagination
@@ -20,11 +19,6 @@ from app.models.task import Task
 router = APIRouter(
     prefix="/projects",
     tags=["Projects"]
-)
-
-workspace_task_router = APIRouter(
-    prefix="/workspaces",
-    tags=["Tasks"]
 )
 
 workspace_project_router = APIRouter(

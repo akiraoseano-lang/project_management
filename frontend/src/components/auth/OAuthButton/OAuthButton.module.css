@@ -1,27 +1,48 @@
 .button {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    width: 100%;
-    padding: 11px 16px;
-    border-radius: 10px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    background: rgba(255, 255, 255, 0.03);
-    color: #f5f3ff;
-    font-size: 14px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 46px;
+  padding: 11px 16px;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #334155;
+
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .button:hover {
-    background: rgba(255, 255, 255, 0.07);
-    transform: translateY(-1px);
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.05);
+}
+
+.button:focus-visible {
+  outline: 2px solid #6366f1;
+  outline-offset: 2px;
+}
+
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .icon {
-    width: 18px;
-    height: 18px;
-    flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
 }

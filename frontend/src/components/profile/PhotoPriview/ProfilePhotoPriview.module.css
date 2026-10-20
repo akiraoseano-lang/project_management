@@ -1,0 +1,631 @@
+
+.photoPage {
+  width: 100%;
+  max-width: 1440px;
+  min-width: 0;
+  margin: 0 auto;
+  padding: 12px 8px 32px;
+  color: #0f172a;
+  box-sizing: border-box;
+}
+
+.photoPage *,
+.photoPage *::before,
+.photoPage *::after {
+  box-sizing: border-box;
+}
+
+.backButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 34px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.backButton:hover {
+  color: #4f46e5;
+}
+
+.pageHeader {
+  margin-bottom: 26px;
+}
+
+.eyebrow {
+  display: block;
+  margin-bottom: 10px;
+  color: #4f46e5;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.7px;
+}
+
+.pageHeader h1 {
+  margin: 0;
+  font-size: clamp(26px, 3vw, 32px);
+  font-weight: 750;
+  letter-spacing: -0.8px;
+}
+
+.pageHeader p {
+  margin: 10px 0 0;
+  color: #64748b;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+/* Preview card */
+
+.previewCard {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 8px 28px rgb(15 23 42 / 4%);
+}
+
+.previewCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 24px 28px;
+  border-bottom: 1px solid #edf0f5;
+}
+
+.previewCardHeader h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 750;
+}
+
+.previewCardHeader p {
+  margin: 7px 0 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.previewBadge {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 13px;
+  border: 1px solid #e0e7ff;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #4f46e5;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* Circular photo */
+
+.previewStage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 430px;
+  padding: 40px 24px;
+  background: radial-gradient(
+    ellipse at center,
+    rgb(224 231 255 / 65%) 0%,
+    rgb(248 250 252 / 85%) 48%,
+    #fff 100%
+  );
+}
+
+.photoFrame {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 260px;
+  height: 260px;
+  flex-shrink: 0;
+  overflow: hidden;
+  padding: 0;
+  border: 5px solid #fff;
+  border-radius: 50%;
+  background: #eef2ff;
+  box-shadow:
+    0 0 0 1px #e0e7ff,
+    0 18px 44px rgb(15 23 42 / 10%);
+  cursor: zoom-in;
+}
+
+.photoFrame:disabled {
+  cursor: default;
+}
+
+.previewImage {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.previewFallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: #4f46e5;
+  font-size: 80px;
+  font-weight: 750;
+}
+
+.photoHoverHint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgb(15 23 42 / 48%);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 650;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.photoFrame:hover .photoHoverHint,
+.photoFrame:focus-visible .photoHoverHint {
+  opacity: 1;
+}
+
+.profileIdentity {
+  margin-top: 24px;
+  text-align: center;
+}
+
+.profileIdentity h2 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 21px;
+  font-weight: 750;
+}
+
+.profileIdentity p {
+  margin: 8px 0 0;
+  color: #64748b;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.pendingBadge {
+  margin-top: 14px;
+  padding: 7px 12px;
+  border: 1px solid #fde68a;
+  border-radius: 999px;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* Upload controls */
+
+.uploadSection {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin: 0 28px;
+  padding: 24px 0;
+  border-top: 1px solid #edf0f5;
+}
+
+.uploadInfo {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
+.uploadIcon {
+  display: flex;
+  flex: 0 0 46px;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 13px;
+  background: #eef2ff;
+  color: #4f46e5;
+}
+
+.uploadInfo h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.uploadInfo p {
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.hiddenInput {
+  display: none;
+}
+
+.chooseButton,
+.saveButton,
+.cancelButton {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 44px;
+  padding: 0 17px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.chooseButton {
+  border-color: #c7d2fe;
+  background: #eef2ff;
+  color: #4338ca;
+}
+
+.chooseButton:hover:not(:disabled) {
+  background: #e0e7ff;
+}
+
+.saveButton {
+  border-color: #4f46e5;
+  background: #4f46e5;
+  color: #fff;
+}
+
+.saveButton:hover:not(:disabled) {
+  background: #4338ca;
+}
+
+.cancelButton {
+  border-color: #dbe3ee;
+  background: #fff;
+  color: #475569;
+}
+
+.cancelButton:hover:not(:disabled) {
+  background: #f8fafc;
+}
+
+.chooseButton:disabled,
+.saveButton:disabled,
+.cancelButton:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.actionSection {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin: 0 28px;
+  padding: 20px 0 24px;
+  border-top: 1px solid #edf0f5;
+}
+
+/* Privacy note */
+
+.privacyNote {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin: 0 28px 24px;
+  padding: 13px 15px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.privacyNote svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: #4f46e5;
+}
+
+/* Feedback */
+
+.feedbackSuccess,
+.feedbackError {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 18px;
+  padding: 13px 15px;
+  border: 1px solid;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.feedbackSuccess {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.feedbackError {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.feedbackSuccess svg,
+.feedbackError svg {
+  flex-shrink: 0;
+}
+
+/* Full-image modal */
+
+.photoModalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgb(15 23 42 / 72%);
+  backdrop-filter: blur(5px);
+  animation: modalFadeIn 0.18s ease;
+}
+
+.photoModal {
+  display: flex;
+  flex-direction: column;
+  width: min(760px, 90vw);
+  max-height: 85vh;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 20%);
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 24px 80px rgb(0 0 0 / 28%);
+  animation: modalScaleIn 0.2s ease;
+}
+
+.photoModalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 22px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.photoModalHeader h2 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 16px;
+  font-weight: 750;
+}
+
+.photoModalHeader p {
+  margin: 5px 0 0;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.photoModalClose {
+  display: flex;
+  flex: 0 0 38px;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border: 0;
+  border-radius: 50%;
+  background: #f1f5f9;
+  color: #334155;
+  cursor: pointer;
+}
+
+.photoModalClose:hover {
+  background: #e2e8f0;
+}
+
+.photoModalBody {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 180px;
+  padding: 20px;
+  overflow: auto;
+  background: #f8fafc;
+}
+
+.photoModalImage {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: calc(85vh - 115px);
+  object-fit: contain;
+  border-radius: 6px;
+}
+
+/* Loading */
+
+.loadingState {
+  display: flex;
+  min-height: 350px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.loadingState p {
+  margin: 0;
+}
+
+.spinner {
+  animation: photoSpin 0.9s linear infinite;
+}
+
+@keyframes photoSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modalScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Responsive */
+
+@media (max-width: 760px) {
+  .photoPage {
+    padding: 4px 0 24px;
+  }
+
+  .backButton {
+    margin-bottom: 26px;
+  }
+
+  .previewCardHeader {
+    padding: 20px;
+  }
+
+  .previewStage {
+    min-height: 350px;
+    padding: 32px 16px;
+  }
+
+  .photoFrame {
+    width: 230px;
+    height: 230px;
+  }
+
+  .uploadSection {
+    align-items: stretch;
+    flex-direction: column;
+    margin: 0 20px;
+    padding: 22px 0;
+  }
+
+  .chooseButton {
+    width: 100%;
+  }
+
+  .actionSection {
+    align-items: stretch;
+    flex-direction: column-reverse;
+    margin: 0 20px;
+  }
+
+  .saveButton,
+  .cancelButton {
+    width: 100%;
+  }
+
+  .privacyNote {
+    margin: 0 20px 20px;
+  }
+
+  .photoModalOverlay {
+    padding: 16px;
+  }
+
+  .photoModal {
+    width: 94vw;
+    max-height: 88vh;
+  }
+
+  .photoModalImage {
+    max-height: calc(88vh - 115px);
+  }
+}
+
+@media (max-width: 420px) {
+  .previewCardHeader {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .previewBadge {
+    align-self: flex-start;
+  }
+
+  .photoFrame {
+    width: 200px;
+    height: 200px;
+  }
+
+  .profileIdentity h2 {
+    font-size: 19px;
+  }
+
+  .uploadInfo {
+    align-items: flex-start;
+  }
+
+  .photoModalHeader {
+    padding: 15px;
+  }
+
+  .photoModalBody {
+    padding: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner,
+  .photoModalOverlay,
+  .photoModal {
+    animation: none;
+  }
+}

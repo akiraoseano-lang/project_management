@@ -9,6 +9,8 @@ export interface UserProfile {
     bio: string | null;
     description: string | null;
 
+    role: string | null;
+
     github_url: string | null;
     linkedin_url: string | null;
     instagram_url: string | null;

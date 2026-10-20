@@ -1,0 +1,373 @@
+
+.sidebar {
+  position: fixed;
+  inset: 0 auto 0 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  width: 264px;
+  height: 100vh;
+  height: 100dvh;
+  padding: 24px 14px 16px;
+  background: #0f172a;
+  color: #cbd5e1;
+  transition: width 0.25s ease, transform 0.25s ease;
+}
+
+.collapsed {
+  width: 78px;
+  padding-right: 12px;
+  padding-left: 12px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 5px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.brand:first-child {
+  flex-shrink: 0;
+}
+
+.logo {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 39px;
+  height: 39px;
+  border-radius: 12px;
+  background: #4f46e5;
+  color: #fff;
+  font-size: 21px;
+  font-weight: 800;
+}
+
+.brandText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 3px;
+}
+
+.brandName {
+  color: #f8fafc;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+}
+
+.brandSubtitle {
+  color: #94a3b8;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.mobileClose {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  margin-left: auto;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #cbd5e1;
+  cursor: pointer;
+}
+
+.collapseButton {
+  position: absolute;
+  top: 31px;
+  right: -13px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 27px;
+  height: 27px;
+  border: 1px solid #334155;
+  border-radius: 50%;
+  background: #1e293b;
+  color: #e2e8f0;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.collapseButton:hover {
+  background: #4f46e5;
+}
+
+.navigation {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  margin-top: 28px;
+  padding-bottom: 12px;
+  scrollbar-width: thin;
+  scrollbar-color: #334155 transparent;
+}
+
+.navGroup {
+  margin-bottom: 24px;
+}
+
+.groupTitle {
+  margin: 0 0 10px 10px;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.1px;
+  white-space: nowrap;
+}
+
+.navLink {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  min-height: 44px;
+  margin: 3px 0;
+  padding: 0 12px;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: #94a3b8;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.navLink > svg {
+  flex-shrink: 0;
+}
+
+.navLink:hover {
+  background: #1e293b;
+  color: #f8fafc;
+}
+
+.navLink.active {
+  border-color: rgb(129 140 248 / 15%);
+  background: rgb(79 70 229 / 18%);
+  color: #a5b4fc;
+}
+
+.navLabel {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+}
+
+.collapsed .brand {
+  justify-content: center;
+  padding: 0;
+}
+
+.collapsed .brandText,
+.collapsed .groupTitle,
+.collapsed .navLabel,
+.collapsed .userInfo {
+  display: none;
+}
+
+.collapsed .navLink {
+  justify-content: center;
+  padding: 0;
+}
+
+.collapsed .navGroup {
+  margin-bottom: 19px;
+}
+
+.sidebarBottom {
+  flex-shrink: 0;
+  padding-top: 14px;
+  border-top: 1px solid #1e293b;
+}
+
+.userCard {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 6px;
+  border-radius: 10px;
+  color: inherit;
+  text-decoration: none;
+  transition: background 0.2s ease;
+}
+
+.userCard:hover {
+  background: #1e293b;
+}
+
+.avatar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  background: #312e81;
+  color: #c7d2fe;
+  font-size: 12px;
+  font-weight: 800;
+  object-fit: cover;
+  object-position: center;
+}
+
+img.avatar {
+  display: block;
+  padding: 0;
+  border-color: rgb(255 255 255 / 15%);
+}
+
+.userInfo {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  gap: 4px;
+}
+
+.userName {
+  overflow: hidden;
+  color: #f1f5f9;
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.userRole {
+  overflow: hidden;
+  color: #94a3b8;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.logoutButton {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  width: 100%;
+  min-height: 43px;
+  margin-top: 6px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: #fca5a5;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.logoutButton:hover {
+  background: rgb(239 68 68 / 10%);
+}
+
+.logoutButton > svg {
+  flex-shrink: 0;
+}
+
+.collapsed .userCard {
+  justify-content: center;
+  padding-right: 0;
+  padding-left: 0;
+}
+
+.collapsed .logoutButton {
+  justify-content: center;
+  padding: 0;
+}
+
+.overlay {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .sidebar,
+  .collapsed {
+    width: 264px;
+    padding: 24px 14px 16px;
+    transform: translateX(-100%);
+  }
+
+  .sidebar.mobileOpen {
+    transform: translateX(0);
+  }
+
+  .sidebar.mobileOpen .brandText,
+  .sidebar.mobileOpen .groupTitle,
+  .sidebar.mobileOpen .navLabel,
+  .sidebar.mobileOpen .userInfo,
+  .sidebar.mobileOpen .logoutButton span {
+    display: initial;
+  }
+
+  .sidebar.mobileOpen .brand {
+    justify-content: flex-start;
+    padding: 0 5px;
+  }
+
+  .sidebar.mobileOpen .navLink {
+    justify-content: flex-start;
+    padding: 0 12px;
+  }
+
+  .sidebar.mobileOpen .navGroup {
+    margin-bottom: 24px;
+  }
+
+  .sidebar.mobileOpen .groupTitle {
+    display: block;
+  }
+
+  .sidebar.mobileOpen .mobileClose {
+    display: flex;
+  }
+
+  .sidebar.mobileOpen .collapseButton {
+    display: none;
+  }
+
+  .sidebar.mobileOpen .userCard {
+    justify-content: flex-start;
+    padding: 10px 6px;
+  }
+
+  .sidebar.mobileOpen .logoutButton {
+    justify-content: flex-start;
+    padding: 0 12px;
+  }
+
+  .overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    display: block;
+    border: none;
+    background: rgb(15 23 42 / 55%);
+  }
+}
