@@ -8,7 +8,9 @@ import {
   ChevronLeft,
   ChevronRight,
   FolderKanban,
+  Layers3,
   LayoutDashboard,
+  ListChecks,
   ListTodo,
   LogOut,
   Settings,
@@ -24,6 +26,7 @@ type SidebarProps = {
   onNavigate?: () => void;
   mobileOpen?: boolean;
   onClose?: () => void;
+  onCollapseChange?: (collapsed: boolean) => void;
 };
 
 const navigationGroups = [
@@ -38,9 +41,9 @@ const navigationGroups = [
   {
     title: "WORK MANAGEMENT",
     items: [
-      { label: "Workspaces", path: "/workspaces", icon: FolderKanban },
+      { label: "Workspaces", path: "/workspaces", icon: Layers3 },
       { label: "Projects", path: "/projects", icon: FolderKanban },
-      { label: "All Tasks", path: "/tasks", icon: ListTodo },
+      { label: "All Tasks", path: "/tasks", icon: ListChecks },
       { label: "Members", path: "/members", icon: Users },
     ],
   },
@@ -64,6 +67,7 @@ const Sidebar = ({
   onNavigate,
   mobileOpen = false,
   onClose,
+  onCollapseChange,
 }: SidebarProps) => {
   const { user, logoutUser } = useAuth();
   const { photoUrl, photoFailed, setPhotoFailed } = useProfilePhoto();
@@ -156,7 +160,13 @@ const Sidebar = ({
           <button
             type="button"
             className={styles.collapseButton}
-            onClick={() => setCollapsed((value) => !value)}
+            onClick={() =>
+              setCollapsed((value) => {
+                const nextValue = !value;
+                onCollapseChange?.(nextValue);
+                return nextValue;
+              })
+            }
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
             {collapsed ? (

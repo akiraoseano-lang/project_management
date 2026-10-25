@@ -17,6 +17,8 @@ from app.dependencies.auth import get_current_user
 from app.utils.workspace_permission import get_workspace_member
 from app.utils.pagination import get_pagination
 
+VALID_TASK_STATUSES = {"TODO", "IN_PROGRESS", "DONE"}
+
 router = APIRouter(
     prefix="/projects",
     tags=["Tasks"]
@@ -327,12 +329,38 @@ def update_task(
 
     is_workspace_owner = workspace_member.role == "OWNER"
     is_project_owner = project.owner_id == current_user.id
+    is_assignee = task.assigned_to == current_user.id
 
-    if not is_workspace_owner and not is_project_owner:
+    changes_content = (
+        task_data.title is not None
+        or task_data.description is not None
+    )
+    changes_status = task_data.status is not None
+
+    if changes_content and not (is_workspace_owner or is_project_owner):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to update this task"
         )
+
+    if changes_status and not (
+        is_workspace_owner or is_project_owner or is_assignee
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the assignee, project owner, or workspace owner can change the task status"
+        )
+
+    if changes_status:
+        normalized_status = task_data.status.strip().upper()
+
+        if normalized_status not in VALID_TASK_STATUSES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid task status"
+            )
+
+        task.status = normalized_status
 
     if task_data.title is not None:
         task.title = task_data.title

@@ -15,6 +15,8 @@ import {
   Users,
 } from "lucide-react";
 
+import { useNavigate } from "react-router-dom";
+
 import { useAuth } from "../../contexts/AuthContext";
 import styles from "./Dashboard.module.css";
 
@@ -186,6 +188,7 @@ const activities = [
 
 const Dashboard = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   const displayName = user?.name?.trim().split(/\s+/)[0] || "there";
 
@@ -245,9 +248,7 @@ const Dashboard = () => {
         <button
           type="button"
           className={styles.createButton}
-          onClick={() =>
-            console.info("Create project: connect this button to the project flow")
-          }
+          onClick={() => navigate("/projects")}
         >
           <Plus size={18} />
           Create Project
@@ -320,7 +321,7 @@ const Dashboard = () => {
             <button
               type="button"
               className={styles.textButton}
-              onClick={() => console.info("Navigate to projects")}
+              onClick={() => navigate("/projects")}
             >
               View all
               <ArrowRight size={16} />
@@ -451,7 +452,7 @@ const Dashboard = () => {
           <button
             type="button"
             className={styles.textButton}
-            onClick={() => console.info("Navigate to tasks")}
+            onClick={() => navigate("/tasks")}
           >
             View all tasks
             <ArrowRight size={16} />

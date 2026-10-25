@@ -51,7 +51,13 @@ const Header = ({ onMenuClick }: HeaderProps) => {
       .map((part) => part.charAt(0).toUpperCase())
       .join("") || "U";
 
-  const currentPage = pageNames[location.pathname] ?? "Workspace";
+  const currentPage =
+    pageNames[location.pathname] ??
+    (location.pathname.startsWith("/workspaces/")
+      ? "Workspace Analytics"
+      : location.pathname.startsWith("/projects/")
+        ? "Project Detail"
+        : "Workspace");
 
   const handleSearch = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

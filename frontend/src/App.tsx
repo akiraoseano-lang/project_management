@@ -11,6 +11,11 @@ import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import Profile from "./components/profile";
 import ProfilePhotoPreview from "./components/profile/PhotoPriview";
+import Workspaces from "./pages/Workspace/Workspace";
+import WorkspaceDetail from "./pages/Workspace/WorkspaceDetail";
+import Projects from "./pages/Project/Projects";
+import ProjectDetail from "./pages/Project/ProjectDetail";
+import Tasks from "./pages/Task/Tasks";
 
 const App = () => {
   return (
@@ -30,6 +35,21 @@ const App = () => {
           <Route path="/profile" element={<Profile />} />
           <Route path="/profile/photo" 
             element={<ProfilePhotoPreview />} />
+          <Route path="/workspaces" element={<Workspaces />} />
+          <Route
+            path="/workspaces/:workspaceId"
+            element={<WorkspaceDetail />}
+          />
+          <Route path="/projects" element={<Projects />} />
+          <Route
+            path="/projects/:projectId"
+            element={<ProjectDetail />}
+          />
+          <Route
+            path="/my-tasks"
+            element={<Tasks mode="mine" />}
+          />
+          <Route path="/tasks" element={<Tasks mode="all" />} />
         </Route>
       </Route>
     </Routes>

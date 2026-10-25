@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, status, HTTPException
+from fastapi import APIRouter, Depends, status, HTTPException, Query
 from sqlalchemy import select, func, or_
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, aliased
 from datetime import datetime, timezone
 
 from app.core.database import get_db
@@ -12,6 +12,13 @@ from app.schemas.workspace import WorkspaceCreate, WorkspaceResponse, WorkspaceU
 from app.schemas.workspace_member import WorkspaceMemberResponse, AddWorkspaceMemberRequest
 from app.schemas.workspace_request import WorkspaceRequestCreate, WorkspaceRequestResponse
 from app.schemas.pagination import PaginatedResponse
+from app.schemas.workspace_analytics import (
+    WorkspaceAnalyticsResponse,
+    WorkspaceAnalyticsStats,
+    WorkspaceMemberSummary,
+    WorkspaceProjectSummary,
+    WorkspaceTaskSummary,
+)
 from app.dependencies.auth import get_current_user
 from app.models.project import Project
 from app.models.project_member import ProjectMember
@@ -74,7 +81,7 @@ def get_workspaces(
         .where(
             WorkspaceMember.user_id == current_user.id
         )
-    )
+    ) or 0
 
     offset, total_pages = get_pagination(
         page=page,
@@ -994,4 +1001,326 @@ def reject_workspace_request(
     db.refresh(workspace_request)
 
     return workspace_request 
+
+
+def _workspace_task_summary(
+    task: Task,
+    project_name: str,
+    creator_name: str | None,
+    assignee_name: str | None,
+) -> WorkspaceTaskSummary:
+    return WorkspaceTaskSummary(
+        id=task.id,
+        project_id=task.project_id,
+        project_name=project_name,
+        title=task.title,
+        description=task.description,
+        status=task.status,
+        created_by=task.created_by,
+        creator_name=creator_name,
+        assigned_to=task.assigned_to,
+        assignee_name=assignee_name,
+        created_at=task.created_at,
+        updated_at=task.updated_at,
+    )
+
+
+@router.get(
+    "/{workspace_id}/analytics",
+    response_model=WorkspaceAnalyticsResponse,
+    status_code=status.HTTP_200_OK,
+)
+def get_workspace_analytics(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    workspace = db.get(Workspace, workspace_id)
+
+    if workspace is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Workspace not found",
+        )
+
+    current_member = get_workspace_member(
+        db=db,
+        workspace_id=workspace_id,
+        user_id=current_user.id,
+    )
+
+    if current_member is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not a member of this workspace",
+        )
+
+    projects = db.scalars(
+        select(Project)
+        .where(
+            Project.workspace_id == workspace_id,
+            Project.status == "ACTIVE",
+        )
+        .order_by(Project.created_at.desc())
+    ).all()
+
+    project_ids = [project.id for project in projects]
+
+    assignee = aliased(User)
+    creator = aliased(User)
+
+    task_rows = []
+    member_counts: dict[int, int] = {}
+
+    if project_ids:
+        task_rows = db.execute(
+            select(
+                Task,
+                Project.name,
+                creator.name,
+                assignee.name,
+            )
+            .join(Project, Task.project_id == Project.id)
+            .join(creator, Task.created_by == creator.id)
+            .outerjoin(assignee, Task.assigned_to == assignee.id)
+            .where(
+                Project.workspace_id == workspace_id,
+                Project.status == "ACTIVE",
+            )
+            .order_by(Task.updated_at.desc())
+        ).all()
+
+        member_counts = {
+            project_id: count
+            for project_id, count in db.execute(
+                select(
+                    ProjectMember.project_id,
+                    func.count(ProjectMember.id),
+                )
+                .where(ProjectMember.project_id.in_(project_ids))
+                .group_by(ProjectMember.project_id)
+            ).all()
+        }
+
+    tasks_by_project: dict[int, list[Task]] = {
+        project_id: [] for project_id in project_ids
+    }
+
+    for task, _, _, _ in task_rows:
+        tasks_by_project.setdefault(task.project_id, []).append(task)
+
+    total_tasks = len(task_rows)
+    todo_tasks = sum(1 for task, _, _, _ in task_rows if task.status == "TODO")
+    in_progress_tasks = sum(
+        1 for task, _, _, _ in task_rows if task.status == "IN_PROGRESS"
+    )
+    done_tasks = sum(1 for task, _, _, _ in task_rows if task.status == "DONE")
+    unassigned_tasks = sum(
+        1 for task, _, _, _ in task_rows if task.assigned_to is None
+    )
+    my_tasks = sum(
+        1
+        for task, _, _, _ in task_rows
+        if task.assigned_to == current_user.id
+    )
+
+    member_rows = db.execute(
+        select(WorkspaceMember, User)
+        .join(User, WorkspaceMember.user_id == User.id)
+        .where(WorkspaceMember.workspace_id == workspace_id)
+        .order_by(WorkspaceMember.joined_at.asc())
+    ).all()
+
+    members = [
+        WorkspaceMemberSummary(
+            id=member.id,
+            user_id=member.user_id,
+            name=user.name,
+            email=user.email,
+            role=member.role,
+            joined_at=member.joined_at,
+        )
+        for member, user in member_rows
+    ]
+
+    project_summaries = []
+
+    for project in projects:
+        project_tasks = tasks_by_project.get(project.id, [])
+        project_total = len(project_tasks)
+        project_done = sum(
+            1 for task in project_tasks if task.status == "DONE"
+        )
+
+        project_summaries.append(
+            WorkspaceProjectSummary(
+                id=project.id,
+                name=project.name,
+                description=project.description,
+                status=project.status,
+                owner_id=project.owner_id,
+                created_at=project.created_at,
+                updated_at=project.updated_at,
+                total_tasks=project_total,
+                todo_tasks=sum(
+                    1 for task in project_tasks if task.status == "TODO"
+                ),
+                in_progress_tasks=sum(
+                    1
+                    for task in project_tasks
+                    if task.status == "IN_PROGRESS"
+                ),
+                done_tasks=project_done,
+                progress=(
+                    round(project_done / project_total * 100, 1)
+                    if project_total
+                    else 0.0
+                ),
+                member_count=member_counts.get(project.id, 0),
+            )
+        )
+
+    recent_tasks = [
+        _workspace_task_summary(task, project_name, creator_name, assignee_name)
+        for task, project_name, creator_name, assignee_name in task_rows[:5]
+    ]
+
+    return WorkspaceAnalyticsResponse(
+        workspace=WorkspaceResponse.model_validate(workspace),
+        role=current_member.role,
+        stats=WorkspaceAnalyticsStats(
+            total_projects=len(projects),
+            total_tasks=total_tasks,
+            todo_tasks=todo_tasks,
+            in_progress_tasks=in_progress_tasks,
+            done_tasks=done_tasks,
+            unassigned_tasks=unassigned_tasks,
+            my_tasks=my_tasks,
+            total_members=len(members),
+            completion_rate=(
+                round(done_tasks / total_tasks * 100, 1)
+                if total_tasks
+                else 0.0
+            ),
+        ),
+        projects=project_summaries,
+        members=members,
+        recent_tasks=recent_tasks,
+    )
+
+
+@router.get(
+    "/{workspace_id}/tasks",
+    response_model=PaginatedResponse[WorkspaceTaskSummary],
+    status_code=status.HTTP_200_OK,
+)
+def get_workspace_tasks(
+    workspace_id: int,
+    page: int = 1,
+    page_size: int = 10,
+    status_filter: str | None = Query(default=None, alias="status"),
+    project_id: int | None = None,
+    mine: bool = False,
+    q: str | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    workspace = db.get(Workspace, workspace_id)
+
+    if workspace is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Workspace not found",
+        )
+
+    current_member = get_workspace_member(
+        db=db,
+        workspace_id=workspace_id,
+        user_id=current_user.id,
+    )
+
+    if current_member is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not a member of this workspace",
+        )
+
+    conditions = [
+        Project.workspace_id == workspace_id,
+        Project.status == "ACTIVE",
+    ]
+
+    if status_filter:
+        normalized_status = status_filter.strip().upper()
+
+        if normalized_status not in {"ALL", "TODO", "IN_PROGRESS", "DONE"}:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid task status filter",
+            )
+
+        if normalized_status != "ALL":
+            conditions.append(Task.status == normalized_status)
+
+    if project_id is not None:
+        conditions.append(Task.project_id == project_id)
+
+    if mine:
+        conditions.append(Task.assigned_to == current_user.id)
+
+    if q and q.strip():
+        search_pattern = f"%{q.strip()}%"
+        conditions.append(
+            or_(
+                Task.title.ilike(search_pattern),
+                Task.description.ilike(search_pattern),
+            )
+        )
+
+    total = db.scalar(
+        select(func.count(Task.id))
+        .join(Project, Task.project_id == Project.id)
+        .where(*conditions)
+    ) or 0
+
+    offset, total_pages = get_pagination(
+        page=page,
+        page_size=page_size,
+        total=total,
+    )
+
+    assignee = aliased(User)
+    creator = aliased(User)
+
+    task_rows = db.execute(
+        select(
+            Task,
+            Project.name,
+            creator.name,
+            assignee.name,
+        )
+        .join(Project, Task.project_id == Project.id)
+        .join(creator, Task.created_by == creator.id)
+        .outerjoin(assignee, Task.assigned_to == assignee.id)
+        .where(*conditions)
+        .order_by(Task.created_at.desc())
+        .offset(offset)
+        .limit(page_size)
+    ).all()
+
+    return {
+        "items": [
+            _workspace_task_summary(
+                task,
+                project_name,
+                creator_name,
+                assignee_name,
+            )
+            for task, project_name, creator_name, assignee_name in task_rows
+        ],
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "total_pages": total_pages,
+    }
 
