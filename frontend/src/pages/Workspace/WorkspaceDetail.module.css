@@ -132,6 +132,74 @@
   cursor: not-allowed;
 }
 
+.headingActions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.editButton {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 39px;
+  padding: 0 14px;
+  color: #ffffff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  background: #4f46e5;
+  border: 1px solid #4f46e5;
+  border-radius: 9px;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.editButton:hover {
+  background: #4338ca;
+  border-color: #4338ca;
+}
+
+.notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+  padding: 11px 14px;
+  color: #047857;
+  font-size: 12px;
+  font-weight: 600;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 10px;
+}
+
+.notice p {
+  flex: 1;
+  margin: 0;
+}
+
+.notice button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  color: inherit;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.notice button:hover {
+  background: rgb(4 120 87 / 10%);
+}
+
 /* Stats */
 
 .statsGrid {
@@ -258,6 +326,23 @@
   color: #94a3b8;
   font-size: 11px;
   line-height: 1.6;
+}
+
+.panelHeaderActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.projectSearchError {
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  color: #b91c1c;
+  font-size: 11px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
 }
 
 .panelCount {
@@ -646,8 +731,37 @@
 .taskFilters {
   display: flex;
   flex-shrink: 0;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+}
+
+.taskSearch {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  color: #94a3b8;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.taskSearch:focus-within {
+  color: #6366f1;
+  border-color: #a5b4fc;
+  box-shadow: 0 0 0 3px rgb(99 102 241 / 10%);
+}
+
+.taskSearch input {
+  width: 130px;
+  color: #475569;
+  font: inherit;
+  font-size: 11px;
+  background: transparent;
+  border: none;
+  outline: none;
 }
 
 .select {
@@ -1107,6 +1221,11 @@
   }
 
   .refreshButton {
+    align-self: flex-start;
+  }
+
+  .headingActions {
+    flex-wrap: wrap;
     align-self: flex-start;
   }
 

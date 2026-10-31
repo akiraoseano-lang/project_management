@@ -6,6 +6,19 @@ export interface Workspace {
     created_at: string;
 }
 
+export type WorkspaceJoinStatus = "PENDING" | "APPROVED" | "REJECTED";
+
+export interface WorkspaceDiscoverItem extends Workspace {
+    is_member: boolean;
+    join_status: WorkspaceJoinStatus | null;
+}
+
+export interface WorkspaceDiscoverQuery {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+}
+
 export interface WorkspaceCreatePayload {
     name: string;
     description: string | null;
@@ -81,6 +94,52 @@ export interface WorkspaceMemberSummary {
     email: string;
     role: WorkspaceRole;
     joined_at: string;
+}
+
+export interface WorkspaceMemberUser {
+    id: number;
+    name: string;
+    email: string;
+}
+
+export interface WorkspaceMember {
+    id: number;
+    role: WorkspaceRole;
+    joined_at: string;
+    user: WorkspaceMemberUser;
+}
+
+export type WorkspaceRequestAction =
+    | "JOIN"
+    | "REMOVE_MEMBER"
+    | "CHANGE_ROLE"
+    | "UPDATE_WORKSPACE";
+
+export type WorkspaceRequestStatus =
+    | "PENDING"
+    | "APPROVED"
+    | "REJECTED";
+
+export interface WorkspaceRequestPayload {
+    action: WorkspaceRequestAction;
+    target_user_id?: number | null;
+    payload?: Record<string, unknown> | null;
+}
+
+export interface WorkspaceRequest {
+    id: number;
+    workspace_id: number;
+    requested_by: number;
+    action: WorkspaceRequestAction;
+    target_user_id: number | null;
+    payload: Record<string, unknown> | null;
+    status: WorkspaceRequestStatus;
+    reviewed_by: number | null;
+    created_at: string;
+    reviewed_at: string | null;
+    requester_name: string | null;
+    requester_email: string | null;
+    target_user_name: string | null;
 }
 
 export interface WorkspaceAnalytics {

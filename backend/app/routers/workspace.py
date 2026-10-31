@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, status, HTTPException, Query
-from sqlalchemy import select, func, or_
+from sqlalchemy import select, func, or_, and_
 from sqlalchemy.orm import Session, joinedload, aliased
 from datetime import datetime, timezone
 
@@ -8,8 +8,8 @@ from app.models.user import User
 from app.models.workspace import Workspace
 from app.models.workspace_member import WorkspaceMember
 from app.models.workspace_request import WorkspaceRequest
-from app.schemas.workspace import WorkspaceCreate, WorkspaceResponse, WorkspaceUpdate
-from app.schemas.workspace_member import WorkspaceMemberResponse, AddWorkspaceMemberRequest
+from app.schemas.workspace import WorkspaceCreate, WorkspaceResponse, WorkspaceUpdate, WorkspaceDiscoverResponse
+from app.schemas.workspace_member import WorkspaceMemberResponse, AddWorkspaceMemberRequest, UpdateWorkspaceMemberRequest
 from app.schemas.workspace_request import WorkspaceRequestCreate, WorkspaceRequestResponse
 from app.schemas.pagination import PaginatedResponse
 from app.schemas.workspace_analytics import (
@@ -140,7 +140,12 @@ def search_workspaces(
     )
 
     total = db.scalar(
-        select(func.count(Workspace.id)).where(conditions)
+        select(func.count(Workspace.id))
+        .join(WorkspaceMember)
+        .where(
+            WorkspaceMember.user_id == current_user.id,
+            conditions,
+        )
     ) or 0
 
     offset, total_pages = get_pagination(
@@ -151,7 +156,11 @@ def search_workspaces(
 
     workspaces = db.scalars(
         select(Workspace)
-        .where(conditions)
+        .join(WorkspaceMember)
+        .where(
+            WorkspaceMember.user_id == current_user.id,
+            conditions,
+        )
         .order_by(Workspace.created_at.desc())
         .offset(offset)
         .limit(page_size)
@@ -159,6 +168,100 @@ def search_workspaces(
 
     return {
         "items": workspaces,
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "total_pages": total_pages
+    }
+
+@router.get(
+    "/discover",
+    response_model=PaginatedResponse[WorkspaceDiscoverResponse],
+    status_code=status.HTTP_200_OK
+)
+def discover_workspaces(
+    q: str = "",
+    page: int = 1,
+    page_size: int = 20,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    search_term = q.strip()
+    page = max(page, 1)
+    page_size = max(1, min(page_size, 100))
+
+    conditions = []
+
+    if search_term:
+        search_pattern = f"%{search_term}%"
+        conditions.append(
+            or_(
+                Workspace.name.ilike(search_pattern),
+                Workspace.description.ilike(search_pattern)
+            )
+        )
+
+    total = db.scalar(
+        select(func.count(Workspace.id))
+        .where(*conditions)
+    ) or 0
+
+    offset, total_pages = get_pagination(
+        page=page,
+        page_size=page_size,
+        total=total
+    )
+
+    membership = aliased(WorkspaceMember)
+
+    join_status_subquery = (
+        select(WorkspaceRequest.status)
+        .where(
+            WorkspaceRequest.workspace_id == Workspace.id,
+            WorkspaceRequest.requested_by == current_user.id,
+            WorkspaceRequest.action == "JOIN"
+        )
+        .order_by(WorkspaceRequest.created_at.desc())
+        .limit(1)
+        .correlate(Workspace)
+        .scalar_subquery()
+    )
+
+    rows = db.execute(
+        select(
+            Workspace,
+            membership.id.label("membership_id"),
+            join_status_subquery.label("join_status")
+        )
+        .outerjoin(
+            membership,
+            and_(
+                membership.workspace_id == Workspace.id,
+                membership.user_id == current_user.id
+            )
+        )
+        .where(*conditions)
+        .order_by(Workspace.name.asc())
+        .offset(offset)
+        .limit(page_size)
+    ).all()
+
+    items = [
+        WorkspaceDiscoverResponse(
+            id=workspace.id,
+            name=workspace.name,
+            description=workspace.description,
+            owner_id=workspace.owner_id,
+            created_at=workspace.created_at,
+            updated_at=workspace.updated_at,
+            is_member=membership_id is not None,
+            join_status=join_status
+        )
+        for workspace, membership_id, join_status in rows
+    ]
+
+    return {
+        "items": items,
         "page": page,
         "page_size": page_size,
         "total": total,
@@ -425,6 +528,85 @@ def add_workspace_member(
 
     return member
 
+@router.patch(
+    "/{workspace_id}/members/{user_id}",
+    response_model=WorkspaceMemberResponse,
+    status_code=status.HTTP_200_OK
+)
+def update_workspace_member_role(
+    workspace_id: int,
+    user_id: int,
+    payload: UpdateWorkspaceMemberRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    workspace = db.get(
+        Workspace,
+        workspace_id
+    )
+
+    if workspace is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Workspace not found"
+        )
+
+    if workspace.owner_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only workspace owner can change member roles"
+        )
+
+    member = db.scalar(
+        select(WorkspaceMember).where(
+            WorkspaceMember.workspace_id == workspace_id,
+            WorkspaceMember.user_id == user_id
+        )
+    )
+
+    if member is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Member not found"
+        )
+
+    if member.role == "OWNER":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Workspace owner role cannot be changed"
+        )
+
+    new_role = payload.role.strip().upper()
+
+    if new_role not in ["ADMIN", "COLLABORATOR"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid workspace role"
+        )
+
+    if member.role == new_role:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User already has this role"
+        )
+
+    member.role = new_role
+
+    db.commit()
+    db.refresh(member)
+
+    member = db.execute(
+        select(WorkspaceMember)
+        .options(
+            joinedload(WorkspaceMember.user)
+        )
+        .where(
+            WorkspaceMember.id == member.id
+        )
+    ).scalar_one()
+
+    return member
+
 @router.delete(
     "/{workspace_id}/members/me",
     status_code=status.HTTP_200_OK 
@@ -603,6 +785,69 @@ def remove_workspace_member(
     }
 
 @router.post(
+    "/{workspace_id}/join",
+    response_model=WorkspaceRequestResponse,
+    status_code=status.HTTP_201_CREATED
+)
+def request_join_workspace(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    workspace = db.scalar(
+        select(Workspace).where(
+            Workspace.id == workspace_id
+        )
+    )
+
+    if not workspace:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Workspace not found"
+        )
+
+    member = db.scalar(
+        select(WorkspaceMember).where(
+            WorkspaceMember.workspace_id == workspace_id,
+            WorkspaceMember.user_id == current_user.id
+        )
+    )
+
+    if member:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You are already a member of this workspace"
+        )
+
+    pending_request = db.scalar(
+        select(WorkspaceRequest).where(
+            WorkspaceRequest.workspace_id == workspace_id,
+            WorkspaceRequest.requested_by == current_user.id,
+            WorkspaceRequest.action == "JOIN",
+            WorkspaceRequest.status == "PENDING"
+        )
+    )
+
+    if pending_request:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You already have a pending join request"
+        )
+
+    join_request = WorkspaceRequest(
+        workspace_id=workspace_id,
+        requested_by=current_user.id,
+        action="JOIN",
+        status="PENDING"
+    )
+
+    db.add(join_request)
+    db.commit()
+    db.refresh(join_request)
+
+    return join_request
+
+@router.post(
     "/{workspace_id}/requests",
     response_model=WorkspaceRequestResponse,
     status_code=status.HTTP_201_CREATED
@@ -715,6 +960,10 @@ def get_workspace_requests(
 
     requests = db.scalars(
         select(WorkspaceRequest)
+        .options(
+            joinedload(WorkspaceRequest.requester),
+            joinedload(WorkspaceRequest.target_user)
+        )
         .where(
             WorkspaceRequest.workspace_id == workspace_id
         )
@@ -792,7 +1041,30 @@ def approve_workspace_request(
             detail="This request has already been reviewed"
         )
 
-    if workspace_request.action == "REMOVE_MEMBER":
+    if workspace_request.action == "JOIN":
+
+        existing_member = db.scalar(
+            select(WorkspaceMember).where(
+                WorkspaceMember.workspace_id == workspace_id,
+                WorkspaceMember.user_id == workspace_request.requested_by
+            )
+        )
+
+        if existing_member:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Requester is already a member of this workspace"
+            )
+
+        db.add(
+            WorkspaceMember(
+                workspace_id=workspace_id,
+                user_id=workspace_request.requested_by,
+                role="COLLABORATOR"
+            )
+        )
+
+    elif workspace_request.action == "REMOVE_MEMBER":
 
         target_member = db.scalar(
             select(WorkspaceMember).where(

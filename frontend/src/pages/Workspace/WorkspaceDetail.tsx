@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -7,14 +7,28 @@ import {
   Clock3,
   FolderKanban,
   ListTodo,
+  Pencil,
   RefreshCw,
+  Search,
   ShieldCheck,
   TrendingUp,
   Users,
+  X,
 } from "lucide-react";
 
-import WorkspacePagination from "../../components/workspaces/WorkspacePagination";
+import Pagination from "../../components/common/Pagination";
+import WorkspaceMembersPanel from "../../components/workspaces/WorkspaceMembersPanel";
+import WorkspaceModal from "../../components/workspaces/WorkspaceModal";
+import WorkspaceRequestsPanel from "../../components/workspaces/WorkspaceRequestsPanel";
+
+import { useAuth } from "../../contexts/AuthContext";
 import { useWorkspaceDashboard } from "../../hooks/useWorkspaceDashboard";
+
+import {
+  createWorkspaceRequest,
+  updateWorkspace,
+} from "../../services/workspaceService";
+import { searchWorkspaceProjects } from "../../services/projectService";
 
 import type {
   TaskStatus,
@@ -79,6 +93,7 @@ function getProjectBadgeLabel(project: WorkspaceProjectSummary) {
 export default function WorkspaceDetail() {
   const { workspaceId } = useParams<{ workspaceId: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const parsedId = Number(workspaceId);
   const id =
@@ -97,6 +112,8 @@ export default function WorkspaceDetail() {
     setProjectFilter,
     mineOnly,
     toggleMineOnly,
+    taskSearchInput,
+    setTaskSearchInput,
     page,
     setPage,
     totalTasks,
@@ -108,6 +125,95 @@ export default function WorkspaceDetail() {
   const projects = analytics?.projects ?? [];
   const members = analytics?.members ?? [];
   const role = analytics?.role;
+
+  const [projectSearchInput, setProjectSearchInput] = useState("");
+  const [projectSearchResults, setProjectSearchResults] = useState<
+    WorkspaceProjectSummary[] | null
+  >(null);
+  const [projectSearchLoading, setProjectSearchLoading] =
+    useState(false);
+  const [projectSearchError, setProjectSearchError] = useState<
+    string | null
+  >(null);
+
+  const [editOpen, setEditOpen] = useState(false);
+  const [savingWorkspace, setSavingWorkspace] = useState(false);
+  const [workspaceNotice, setWorkspaceNotice] = useState<
+    string | null
+  >(null);
+
+  useEffect(() => {
+    const term = projectSearchInput.trim();
+
+    if (!term || id === null) {
+      setProjectSearchResults(null);
+      setProjectSearchLoading(false);
+      setProjectSearchError(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const timeoutId = window.setTimeout(async () => {
+      setProjectSearchLoading(true);
+      setProjectSearchError(null);
+
+      try {
+        const result = await searchWorkspaceProjects(id, {
+          search: term,
+          pageSize: 100,
+        });
+
+        if (cancelled) return;
+
+        const summaryById = new Map(
+          projects.map((project) => [project.id, project]),
+        );
+
+        setProjectSearchResults(
+          result.items.map((project) => {
+            return (
+              summaryById.get(project.id) ?? {
+                id: project.id,
+                name: project.name,
+                description: project.description,
+                status: project.status,
+                owner_id: project.owner_id,
+                created_at: project.created_at,
+                updated_at: project.updated_at,
+                total_tasks: 0,
+                todo_tasks: 0,
+                in_progress_tasks: 0,
+                done_tasks: 0,
+                progress: 0,
+                member_count: 0,
+              }
+            );
+          }),
+        );
+      } catch (err) {
+        if (cancelled) return;
+
+        setProjectSearchResults([]);
+        setProjectSearchError(
+          err instanceof Error
+            ? err.message
+            : "Gagal mencari project.",
+        );
+      } finally {
+        if (!cancelled) {
+          setProjectSearchLoading(false);
+        }
+      }
+    }, 350);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [projectSearchInput, id, analytics?.projects]);
+
+  const displayedProjects = projectSearchResults ?? projects;
 
   const statusTabs: {
     value: TaskStatusFilter;
@@ -167,6 +273,51 @@ export default function WorkspaceDetail() {
 
   const handleProjectFilter = (value: string) => {
     setProjectFilter(value === "ALL" ? "ALL" : Number(value));
+  };
+
+  const canEditWorkspace = role === "OWNER";
+  const canRequestWorkspaceUpdate = role === "ADMIN";
+
+  const handleWorkspaceUpdate = async (data: {
+    name: string;
+    description: string;
+  }) => {
+    if (id === null) {
+      throw new Error("Workspace tidak ditemukan.");
+    }
+
+    setSavingWorkspace(true);
+    setWorkspaceNotice(null);
+
+    try {
+      const description = data.description.trim() || null;
+
+      if (canEditWorkspace) {
+        await updateWorkspace(id, {
+          name: data.name,
+          description,
+        });
+        setWorkspaceNotice(
+          "Perubahan workspace berhasil disimpan.",
+        );
+        reload();
+      } else {
+        await createWorkspaceRequest(id, {
+          action: "UPDATE_WORKSPACE",
+          payload: {
+            name: data.name,
+            description,
+          },
+        });
+        setWorkspaceNotice(
+          "Pengajuan perubahan workspace dikirim ke owner untuk disetujui.",
+        );
+      }
+
+      setEditOpen(false);
+    } finally {
+      setSavingWorkspace(false);
+    }
   };
 
   if (loading && !analytics) {
@@ -260,16 +411,46 @@ export default function WorkspaceDetail() {
           </div>
         </div>
 
-        <button
-          type="button"
-          className={styles.refreshButton}
-          onClick={() => void reload()}
-          disabled={loading || tasksLoading}
-        >
-          <RefreshCw size={16} />
-          Refresh
-        </button>
+        <div className={styles.headingActions}>
+          {(canEditWorkspace || canRequestWorkspaceUpdate) && (
+            <button
+              type="button"
+              className={styles.editButton}
+              onClick={() => {
+                setWorkspaceNotice(null);
+                setEditOpen(true);
+              }}
+            >
+              <Pencil size={16} />
+              {canEditWorkspace ? "Edit" : "Ajukan perubahan"}
+            </button>
+          )}
+
+          <button
+            type="button"
+            className={styles.refreshButton}
+            onClick={() => void reload()}
+            disabled={loading || tasksLoading}
+          >
+            <RefreshCw size={16} />
+            Refresh
+          </button>
+        </div>
       </section>
+
+      {workspaceNotice && (
+        <div className={styles.notice} role="status">
+          <CheckCircle2 size={16} />
+          <p>{workspaceNotice}</p>
+          <button
+            type="button"
+            onClick={() => setWorkspaceNotice(null)}
+            aria-label="Tutup notifikasi"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       <section className={styles.statsGrid} aria-label="Workspace statistics">
         <article className={styles.statCard}>
@@ -333,23 +514,51 @@ export default function WorkspaceDetail() {
                 Progress setiap project di workspace ini.
               </p>
             </div>
-            <span className={styles.panelCount}>
-              {projects.length} project
-            </span>
+            <div className={styles.panelHeaderActions}>
+              <label className={styles.taskSearch}>
+                <Search size={14} />
+                <input
+                  type="search"
+                  value={projectSearchInput}
+                  onChange={(event) =>
+                    setProjectSearchInput(event.target.value)
+                  }
+                  placeholder="Cari project..."
+                  aria-label="Cari project di workspace"
+                />
+              </label>
+
+              <span className={styles.panelCount}>
+                {projectSearchLoading
+                  ? "Mencari..."
+                  : `${displayedProjects.length} project`}
+              </span>
+            </div>
           </div>
 
-          {projects.length === 0 ? (
+          {projectSearchError && (
+            <p className={styles.projectSearchError}>
+              {projectSearchError}
+            </p>
+          )}
+
+          {displayedProjects.length === 0 ? (
             <div className={styles.emptyPanel}>
               <FolderKanban size={24} />
-              <h3>Belum ada project</h3>
+              <h3>
+                {projectSearchInput.trim()
+                  ? "Project tidak ditemukan"
+                  : "Belum ada project"}
+              </h3>
               <p>
-                Project yang dibuat di workspace ini akan muncul di
-                sini.
+                {projectSearchInput.trim()
+                  ? "Coba gunakan kata kunci lain."
+                  : "Project yang dibuat di workspace ini akan muncul di sini."}
               </p>
             </div>
           ) : (
             <div className={styles.projectList}>
-              {projects.map((project) => (
+              {displayedProjects.map((project) => (
                 <article
                   className={styles.projectItem}
                   key={project.id}
@@ -534,6 +743,19 @@ export default function WorkspaceDetail() {
           </div>
 
           <div className={styles.taskFilters}>
+            <label className={styles.taskSearch}>
+              <Search size={14} />
+              <input
+                type="search"
+                value={taskSearchInput}
+                onChange={(event) =>
+                  setTaskSearchInput(event.target.value)
+                }
+                placeholder="Cari task..."
+                aria-label="Cari task di workspace"
+              />
+            </label>
+
             <select
               className={styles.select}
               value={projectFilter}
@@ -662,60 +884,45 @@ export default function WorkspaceDetail() {
               </table>
             </div>
 
-            <WorkspacePagination
+            <Pagination
               page={page}
               totalPages={totalPages}
               onPageChange={setPage}
+              ariaLabel="Pagination task workspace"
             />
           </>
         )}
       </section>
 
-      <section className={styles.panel}>
-        <div className={styles.panelHeader}>
-          <div>
-            <h2>Workspace Members</h2>
-            <p>Orang-orang yang berkolaborasi di workspace ini.</p>
-          </div>
-          <span className={styles.panelCount}>
-            {members.length} member
-          </span>
-        </div>
+      <WorkspaceMembersPanel
+        workspaceId={id as number}
+        role={role ?? "COLLABORATOR"}
+        currentUserId={user?.id}
+        members={members}
+        onChanged={reload}
+        onLeft={() => navigate("/workspaces")}
+      />
 
-        {members.length === 0 ? (
-          <div className={styles.emptyPanel}>
-            <Users size={24} />
-            <h3>Belum ada member</h3>
-          </div>
-        ) : (
-          <div className={styles.memberGrid}>
-            {members.map((member) => (
-              <article className={styles.memberCard} key={member.id}>
-                <span className={styles.memberAvatar}>
-                  {getInitials(member.name)}
-                </span>
+      <WorkspaceRequestsPanel
+        workspaceId={id as number}
+        role={role ?? "COLLABORATOR"}
+        members={members}
+        onChanged={reload}
+      />
 
-                <div className={styles.memberInfo}>
-                  <strong>{member.name}</strong>
-                  <span>{member.email}</span>
-                </div>
-
-                <span
-                  className={`${styles.memberRole} ${
-                    member.role === "OWNER"
-                      ? styles.roleOwner
-                      : member.role === "ADMIN"
-                        ? styles.roleAdmin
-                        : styles.roleCollaborator
-                  }`}
-                >
-                  {ROLE_LABELS[member.role] ?? member.role}
-                </span>
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
+      <WorkspaceModal
+        open={editOpen}
+        loading={savingWorkspace}
+        mode="edit"
+        initialData={{
+          name: workspace.name,
+          description: workspace.description ?? "",
+        }}
+        onClose={() => {
+          if (!savingWorkspace) setEditOpen(false);
+        }}
+        onSubmit={handleWorkspaceUpdate}
+      />
     </main>
   );
 }

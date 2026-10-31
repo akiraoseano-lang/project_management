@@ -5,6 +5,9 @@ from pydantic import BaseModel, ConfigDict
 class AddWorkspaceMemberRequest(BaseModel):
     user_id: int
 
+class UpdateWorkspaceMemberRequest(BaseModel):
+    role: str
+
 class MemberUserResponse(BaseModel):
     id: int
     name: str

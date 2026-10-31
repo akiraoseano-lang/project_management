@@ -2,18 +2,20 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FolderPlus, FolderKanban, RefreshCw } from "lucide-react";
 
+import ConfirmDeleteModal from "../../components/common/ConfirmDeleteModal";
+import Pagination from "../../components/common/Pagination";
 import WorkspaceCard from "../../components/workspaces/WorkspaceCard";
 import WorkspaceModal from "../../components/workspaces/WorkspaceModal";
-import WorkspaceDeleteModal from "../../components/workspaces/WorkspaceDeleteModal";
 import WorkspaceToolbar from "../../components/workspaces/WorkspaceToolbar";
-import WorkspacePagination from "../../components/workspaces/WorkspacePagination";
 
 import { useWorkspace } from "../../hooks/useWorkspaces";
+import { useAuth } from "../../contexts/AuthContext";
 
 import styles from "./Workspace.module.css";
 
 export default function Workspaces() {
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const {
     workspaces,
@@ -239,24 +241,31 @@ export default function Workspaces() {
         ) : !error ? (
           <>
             <div className={styles.grid}>
-              {workspaces.map((workspace) => (
-                <WorkspaceCard
-                  key={workspace.id}
-                  id={String(workspace.id)}
-                  name={workspace.name}
-                  description={workspace.description}
-                  createdAt={workspace.created_at}
-                  onOpen={handleOpenWorkspace}
-                  onEdit={handleEditWorkspace}
-                  onDelete={handleRequestDelete}
-                />
-              ))}
+              {workspaces.map((workspace) => {
+                const isOwner = workspace.owner_id === user?.id;
+
+                return (
+                  <WorkspaceCard
+                    key={workspace.id}
+                    id={String(workspace.id)}
+                    name={workspace.name}
+                    description={workspace.description}
+                    createdAt={workspace.created_at}
+                    onOpen={handleOpenWorkspace}
+                    onEdit={isOwner ? handleEditWorkspace : undefined}
+                    onDelete={
+                      isOwner ? handleRequestDelete : undefined
+                    }
+                  />
+                );
+              })}
             </div>
 
-            <WorkspacePagination
+            <Pagination
               page={page}
               totalPages={totalPages}
               onPageChange={setPage}
+              ariaLabel="Pagination workspace"
             />
           </>
         ) : null}
@@ -278,8 +287,18 @@ export default function Workspaces() {
         onSubmit={editingWorkspace ? handleUpdate : handleCreate}
       />
 
-      <WorkspaceDeleteModal
-        workspace={deleteTarget}
+      <ConfirmDeleteModal
+        open={deleteTarget !== null}
+        title="Hapus workspace?"
+        description={
+          <>
+            Kamu yakin ingin menghapus workspace{" "}
+            <strong>{deleteTarget?.name}</strong>? Tindakan ini dapat
+            memengaruhi project dan task yang terkait dan tidak bisa
+            dibatalkan.
+          </>
+        }
+        confirmLabel="Hapus workspace"
         onClose={() => setDeleteTarget(null)}
         onConfirm={handleConfirmDelete}
       />

@@ -822,14 +822,9 @@ def search_workspace_tasks(
     base_query = (
         select(Task)
         .join(Project, Task.project_id == Project.id)
-        .join(
-            ProjectMember,
-            ProjectMember.project_id == Project.id
-        )
         .where(
             Project.workspace_id == workspace_id,
             Project.status == "ACTIVE",
-            ProjectMember.user_id == current_user.id,
             or_(
                 Task.title.ilike(search_pattern),
                 Task.description.ilike(search_pattern)

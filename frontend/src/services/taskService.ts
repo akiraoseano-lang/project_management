@@ -1,9 +1,13 @@
+import { api } from "../api/client";
+
 import {
   getProjectCatalog,
   getProjectMembers,
 } from "./projectService";
 
-import type { PaginatedResponse, WorkspaceRole } from "../types/workspace";
+import { getWorkspaceMembers } from "./workspaceService";
+
+import type { PaginatedResponse } from "../types/workspace";
 
 import type {
   Task,
@@ -15,65 +19,6 @@ import type {
   TaskSummary,
   TaskUpdatePayload,
 } from "../types/task";
-
-const API_BASE_URL =
-  import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000";
-
-interface WorkspaceMemberEntry {
-  id: number;
-  role: WorkspaceRole;
-  joined_at: string;
-  user: {
-    id: number;
-    name: string;
-    email: string;
-  };
-}
-
-async function request<T>(
-  path: string,
-  options: RequestInit = {},
-): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    credentials: "include",
-    headers: {
-      Accept: "application/json",
-      ...(options.body
-        ? { "Content-Type": "application/json" }
-        : {}),
-      ...options.headers,
-    },
-  });
-
-  if (!response.ok) {
-    let message = `Request gagal (${response.status})`;
-
-    try {
-      const body = (await response.json()) as {
-        detail?: string | { msg?: string }[];
-      };
-
-      if (typeof body.detail === "string") {
-        message = body.detail;
-      } else if (Array.isArray(body.detail)) {
-        message = body.detail
-          .map((item) => item.msg ?? "Data tidak valid")
-          .join(", ");
-      }
-    } catch {
-      // Response tidak memiliki JSON yang bisa dibaca.
-    }
-
-    throw new Error(message);
-  }
-
-  if (response.status === 204) {
-    return undefined as T;
-  }
-
-  return (await response.json()) as T;
-}
 
 function buildQueryParams(
   query: TaskQuery,
@@ -122,7 +67,7 @@ export async function getTaskCatalog(): Promise<TaskCatalog> {
 export async function getMyTasks(
   query: TaskQuery = {},
 ): Promise<PaginatedResponse<TaskSummary>> {
-  return request<PaginatedResponse<TaskSummary>>(
+  return api<PaginatedResponse<TaskSummary>>(
     `/tasks/my?${buildQueryParams(query, 10)}`,
   );
 }
@@ -130,20 +75,35 @@ export async function getMyTasks(
 export async function getAllTasks(
   query: TaskQuery = {},
 ): Promise<PaginatedResponse<TaskSummary>> {
-  return request<PaginatedResponse<TaskSummary>>(
+  return api<PaginatedResponse<TaskSummary>>(
     `/tasks?${buildQueryParams(query, 10)}`,
   );
 }
 
+export async function searchWorkspaceTasks(
+  workspaceId: number,
+  query: { search: string; page?: number; pageSize?: number },
+): Promise<PaginatedResponse<Task>> {
+  const params = new URLSearchParams({
+    q: query.search.trim(),
+    page: String(query.page ?? 1),
+    page_size: String(query.pageSize ?? 20),
+  });
+
+  return api<PaginatedResponse<Task>>(
+    `/workspaces/${workspaceId}/tasks/search?${params}`,
+  );
+}
+
 export async function getTask(taskId: number): Promise<Task> {
-  return request<Task>(`/projects/tasks/${taskId}`);
+  return api<Task>(`/projects/tasks/${taskId}`);
 }
 
 export async function createTask(
   projectId: number,
   payload: TaskCreatePayload,
 ): Promise<Task> {
-  return request<Task>(`/projects/${projectId}/tasks`, {
+  return api<Task>(`/projects/${projectId}/tasks`, {
     method: "POST",
     body: JSON.stringify(payload),
   });
@@ -153,20 +113,20 @@ export async function updateTask(
   taskId: number,
   payload: TaskUpdatePayload,
 ): Promise<Task> {
-  return request<Task>(`/projects/tasks/${taskId}`, {
+  return api<Task>(`/projects/tasks/${taskId}`, {
     method: "PATCH",
     body: JSON.stringify(payload),
   });
 }
 
 export async function claimTask(taskId: number): Promise<Task> {
-  return request<Task>(`/projects/tasks/${taskId}/claim`, {
+  return api<Task>(`/projects/tasks/${taskId}/claim`, {
     method: "POST",
   });
 }
 
 export async function unclaimTask(taskId: number): Promise<Task> {
-  return request<Task>(`/projects/tasks/${taskId}/unclaim`, {
+  return api<Task>(`/projects/tasks/${taskId}/unclaim`, {
     method: "POST",
   });
 }
@@ -174,7 +134,7 @@ export async function unclaimTask(taskId: number): Promise<Task> {
 export async function getTaskChecklist(
   taskId: number,
 ): Promise<TaskChecklistItem[]> {
-  return request<TaskChecklistItem[]>(
+  return api<TaskChecklistItem[]>(
     `/projects/tasks/${taskId}/checklist`,
   );
 }
@@ -183,7 +143,7 @@ export async function createChecklistItem(
   taskId: number,
   title: string,
 ): Promise<TaskChecklistItem> {
-  return request<TaskChecklistItem>(
+  return api<TaskChecklistItem>(
     `/projects/tasks/${taskId}/checklist`,
     {
       method: "POST",
@@ -195,24 +155,12 @@ export async function createChecklistItem(
 export async function toggleChecklistItem(
   checklistId: number,
 ): Promise<TaskChecklistItem> {
-  return request<TaskChecklistItem>(
+  return api<TaskChecklistItem>(
     `/projects/tasks/checklist/${checklistId}/toggle`,
     {
       method: "POST",
     },
   );
-}
-
-async function getWorkspaceMemberEntries(
-  workspaceId: number,
-): Promise<WorkspaceMemberEntry[]> {
-  const result = await request<
-    PaginatedResponse<WorkspaceMemberEntry>
-  >(
-    `/workspaces/${workspaceId}/members?page=1&page_size=100`,
-  );
-
-  return result.items;
 }
 
 export async function getAssignableMembers(
@@ -221,11 +169,11 @@ export async function getAssignableMembers(
 ): Promise<TaskAssignee[]> {
   const [projectMembers, workspaceMembers] = await Promise.all([
     getProjectMembers(projectId),
-    getWorkspaceMemberEntries(workspaceId),
+    getWorkspaceMembers(workspaceId),
   ]);
 
   const workspaceMemberMap = new Map(
-    workspaceMembers.map((member) => [member.user.id, member]),
+    workspaceMembers.items.map((member) => [member.user.id, member]),
   );
 
   return projectMembers.items.flatMap((member) => {

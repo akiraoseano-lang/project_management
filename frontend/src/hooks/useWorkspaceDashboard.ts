@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 
+import { useAuth } from "../contexts/AuthContext";
+
 import {
   getWorkspaceAnalytics,
   getWorkspaceTasks,
 } from "../services/workspaceService";
+import { searchWorkspaceTasks } from "../services/taskService";
 
 import type {
   TaskStatusFilter,
@@ -12,8 +15,11 @@ import type {
 } from "../types/workspace";
 
 const TASK_PAGE_SIZE = 8;
+const SEARCH_DELAY = 350;
 
 export function useWorkspaceDashboard(workspaceId: number | null) {
+  const { user } = useAuth();
+
   const [analytics, setAnalytics] = useState<WorkspaceAnalytics | null>(
     null,
   );
@@ -25,6 +31,8 @@ export function useWorkspaceDashboard(workspaceId: number | null) {
     number | "ALL"
   >("ALL");
   const [mineOnly, setMineOnly] = useState(false);
+  const [taskSearchInput, setTaskSearchInput] = useState("");
+  const [taskSearch, setTaskSearch] = useState("");
 
   const [page, setPageState] = useState(1);
   const [totalTasks, setTotalTasks] = useState(0);
@@ -34,6 +42,15 @@ export function useWorkspaceDashboard(workspaceId: number | null) {
   const [tasksLoading, setTasksLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tasksError, setTasksError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setTaskSearch(taskSearchInput.trim());
+      setPageState(1);
+    }, SEARCH_DELAY);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [taskSearchInput]);
 
   const loadAnalytics = useCallback(async () => {
     if (workspaceId === null) {
@@ -74,18 +91,87 @@ export function useWorkspaceDashboard(workspaceId: number | null) {
     setTasksError(null);
 
     try {
-      const result = await getWorkspaceTasks(workspaceId, {
-        page,
-        pageSize: TASK_PAGE_SIZE,
-        status: statusFilter,
-        projectId:
-          projectFilter === "ALL" ? undefined : projectFilter,
-        mine: mineOnly,
-      });
+      if (taskSearch) {
+        const result = await searchWorkspaceTasks(workspaceId, {
+          search: taskSearch,
+          page: 1,
+          pageSize: 100,
+        });
 
-      setTasks(result.items);
-      setTotalTasks(result.total);
-      setTotalPages(result.total_pages);
+        const projectNames = new Map(
+          (analytics?.projects ?? []).map((project) => [
+            project.id,
+            project.name,
+          ]),
+        );
+
+        const memberNames = new Map(
+          (analytics?.members ?? []).map((member) => [
+            member.user_id,
+            member.name,
+          ]),
+        );
+
+        const mapped: WorkspaceTaskSummary[] = result.items.map(
+          (task) => ({
+            ...task,
+            project_name:
+              projectNames.get(task.project_id) ??
+              `Project #${task.project_id}`,
+            creator_name:
+              memberNames.get(task.created_by) ?? null,
+            assignee_name: task.assigned_to
+              ? memberNames.get(task.assigned_to) ?? null
+              : null,
+          }),
+        );
+
+        const filtered = mapped.filter((task) => {
+          if (
+            statusFilter !== "ALL" &&
+            task.status !== statusFilter
+          ) {
+            return false;
+          }
+
+          if (
+            projectFilter !== "ALL" &&
+            task.project_id !== projectFilter
+          ) {
+            return false;
+          }
+
+          if (mineOnly && task.assigned_to !== user?.id) {
+            return false;
+          }
+
+          return true;
+        });
+
+        const totalPagesValue = Math.ceil(
+          filtered.length / TASK_PAGE_SIZE,
+        );
+        const offset = (page - 1) * TASK_PAGE_SIZE;
+
+        setTasks(
+          filtered.slice(offset, offset + TASK_PAGE_SIZE),
+        );
+        setTotalTasks(filtered.length);
+        setTotalPages(totalPagesValue);
+      } else {
+        const result = await getWorkspaceTasks(workspaceId, {
+          page,
+          pageSize: TASK_PAGE_SIZE,
+          status: statusFilter,
+          projectId:
+            projectFilter === "ALL" ? undefined : projectFilter,
+          mine: mineOnly,
+        });
+
+        setTasks(result.items);
+        setTotalTasks(result.total);
+        setTotalPages(result.total_pages);
+      }
     } catch (err) {
       setTasks([]);
       setTotalTasks(0);
@@ -98,7 +184,16 @@ export function useWorkspaceDashboard(workspaceId: number | null) {
     } finally {
       setTasksLoading(false);
     }
-  }, [workspaceId, page, statusFilter, projectFilter, mineOnly]);
+  }, [
+    workspaceId,
+    page,
+    statusFilter,
+    projectFilter,
+    mineOnly,
+    taskSearch,
+    analytics,
+    user?.id,
+  ]);
 
   useEffect(() => {
     void loadAnalytics();
@@ -107,6 +202,14 @@ export function useWorkspaceDashboard(workspaceId: number | null) {
   useEffect(() => {
     void loadTasks();
   }, [loadTasks]);
+
+  useEffect(() => {
+    if (totalPages === 0 && page !== 1) {
+      setPageState(1);
+    } else if (totalPages > 0 && page > totalPages) {
+      setPageState(totalPages);
+    }
+  }, [page, totalPages]);
 
   const setStatusFilter = (status: TaskStatusFilter) => {
     setStatusFilterState(status);
@@ -145,6 +248,9 @@ export function useWorkspaceDashboard(workspaceId: number | null) {
     setProjectFilter,
     mineOnly,
     toggleMineOnly,
+    taskSearchInput,
+    setTaskSearchInput,
+    taskSearch,
     page,
     setPage,
     totalTasks,

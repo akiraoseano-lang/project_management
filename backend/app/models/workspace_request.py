@@ -95,3 +95,15 @@ class WorkspaceRequest(Base):
         "User",
         foreign_keys=[reviewed_by]
     )
+
+    @property
+    def requester_name(self) -> str | None:
+        return self.requester.name if self.requester else None
+
+    @property
+    def requester_email(self) -> str | None:
+        return self.requester.email if self.requester else None
+
+    @property
+    def target_user_name(self) -> str | None:
+        return self.target_user.name if self.target_user else None

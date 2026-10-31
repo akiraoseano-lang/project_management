@@ -1,18 +1,22 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-import styles from "./TaskPagination.module.css";
+import styles from "./Pagination.module.css";
 
-interface TaskPaginationProps {
+interface PaginationProps {
   page: number;
   totalPages: number;
   onPageChange: (page: number) => void;
+  ariaLabel?: string;
 }
 
 function getVisiblePages(page: number, totalPages: number): number[] {
   const windowSize = 5;
   const start = Math.max(
     1,
-    Math.min(page - Math.floor(windowSize / 2), totalPages - windowSize + 1),
+    Math.min(
+      page - Math.floor(windowSize / 2),
+      totalPages - windowSize + 1,
+    ),
   );
   const end = Math.min(totalPages, start + windowSize - 1);
 
@@ -22,17 +26,18 @@ function getVisiblePages(page: number, totalPages: number): number[] {
   );
 }
 
-export default function TaskPagination({
+export default function Pagination({
   page,
   totalPages,
   onPageChange,
-}: TaskPaginationProps) {
+  ariaLabel = "Pagination",
+}: PaginationProps) {
   if (totalPages <= 1) return null;
 
   const pages = getVisiblePages(page, totalPages);
 
   return (
-    <nav className={styles.pagination} aria-label="Task pagination">
+    <nav className={styles.pagination} aria-label={ariaLabel}>
       <button
         type="button"
         className={styles.arrow}
@@ -53,7 +58,9 @@ export default function TaskPagination({
             >
               1
             </button>
-            {pages[0] > 2 && <span className={styles.ellipsis}>…</span>}
+            {pages[0] > 2 && (
+              <span className={styles.ellipsis}>…</span>
+            )}
           </>
         )}
 

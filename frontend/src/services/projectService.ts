@@ -1,3 +1,5 @@
+import { api } from "../api/client";
+
 import {
   getWorkspaceAnalytics,
   getWorkspaceTasks,
@@ -8,8 +10,11 @@ import type {
   Project,
   ProjectCatalog,
   ProjectCreatePayload,
+  ProjectJoinRequest,
+  ProjectJoinResult,
   ProjectListItem,
   ProjectMember,
+  ProjectRequest,
   ProjectUpdatePayload,
   ProjectWorkspaceOption,
 } from "../types/project";
@@ -21,54 +26,6 @@ import type {
   WorkspaceTaskQuery,
   WorkspaceTaskSummary,
 } from "../types/workspace";
-
-const API_BASE_URL =
-  import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000";
-
-async function request<T>(
-  path: string,
-  options: RequestInit = {},
-): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    credentials: "include",
-    headers: {
-      Accept: "application/json",
-      ...(options.body
-        ? { "Content-Type": "application/json" }
-        : {}),
-      ...options.headers,
-    },
-  });
-
-  if (!response.ok) {
-    let message = `Request gagal (${response.status})`;
-
-    try {
-      const body = (await response.json()) as {
-        detail?: string | { msg?: string }[];
-      };
-
-      if (typeof body.detail === "string") {
-        message = body.detail;
-      } else if (Array.isArray(body.detail)) {
-        message = body.detail
-          .map((item) => item.msg ?? "Data tidak valid")
-          .join(", ");
-      }
-    } catch {
-      // Response tidak memiliki JSON yang bisa dibaca.
-    }
-
-    throw new Error(message);
-  }
-
-  if (response.status === 204) {
-    return undefined as T;
-  }
-
-  return (await response.json()) as T;
-}
 
 async function getAllWorkspaces(): Promise<Workspace[]> {
   const workspaces: Workspace[] = [];
@@ -147,13 +104,13 @@ export async function getProjectCatalog(): Promise<ProjectCatalog> {
 }
 
 export async function getProject(projectId: number): Promise<Project> {
-  return request<Project>(`/projects/${projectId}`);
+  return api<Project>(`/projects/${projectId}`);
 }
 
 export async function getProjectMembers(
   projectId: number,
 ): Promise<PaginatedResponse<ProjectMember>> {
-  return request<PaginatedResponse<ProjectMember>>(
+  return api<PaginatedResponse<ProjectMember>>(
     `/projects/${projectId}/members?page=1&page_size=100`,
   );
 }
@@ -175,11 +132,26 @@ export async function getProjectTasks(
   });
 }
 
+export async function searchWorkspaceProjects(
+  workspaceId: number,
+  query: { search: string; page?: number; pageSize?: number },
+): Promise<PaginatedResponse<Project>> {
+  const params = new URLSearchParams({
+    q: query.search.trim(),
+    page: String(query.page ?? 1),
+    page_size: String(query.pageSize ?? 20),
+  });
+
+  return api<PaginatedResponse<Project>>(
+    `/workspaces/${workspaceId}/projects/search?${params}`,
+  );
+}
+
 export async function createProject(
   workspaceId: number,
   payload: ProjectCreatePayload,
 ): Promise<Project> {
-  return request<Project>(`/workspaces/${workspaceId}/projects`, {
+  return api<Project>(`/workspaces/${workspaceId}/projects`, {
     method: "POST",
     body: JSON.stringify(payload),
   });
@@ -189,7 +161,7 @@ export async function updateProject(
   projectId: number,
   payload: ProjectUpdatePayload,
 ): Promise<Project> {
-  return request<Project>(`/projects/${projectId}`, {
+  return api<Project>(`/projects/${projectId}`, {
     method: "PATCH",
     body: JSON.stringify(payload),
   });
@@ -198,7 +170,119 @@ export async function updateProject(
 export async function deleteProject(
   projectId: number,
 ): Promise<void> {
-  await request<void>(`/projects/${projectId}`, {
+  await api<unknown>(`/projects/${projectId}`, {
     method: "DELETE",
+  });
+}
+
+export async function addProjectMember(
+  projectId: number,
+  userId: number,
+): Promise<ProjectMember> {
+  return api<ProjectMember>(`/projects/${projectId}/members`, {
+    method: "POST",
+    body: JSON.stringify({ user_id: userId }),
+  });
+}
+
+export async function removeProjectMember(
+  projectId: number,
+  userId: number,
+): Promise<void> {
+  await api<unknown>(`/projects/${projectId}/members/${userId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function leaveProject(projectId: number): Promise<void> {
+  await api<unknown>(`/projects/${projectId}/leave`, {
+    method: "DELETE",
+  });
+}
+
+export async function requestJoinProject(
+  projectId: number,
+): Promise<ProjectJoinResult> {
+  return api<ProjectJoinResult>(`/projects/${projectId}/join`, {
+    method: "POST",
+  });
+}
+
+export async function getProjectJoinRequests(
+  projectId: number,
+  page = 1,
+  pageSize = 100,
+): Promise<PaginatedResponse<ProjectJoinRequest>> {
+  const params = new URLSearchParams({
+    page: String(page),
+    page_size: String(pageSize),
+  });
+
+  return api<PaginatedResponse<ProjectJoinRequest>>(
+    `/project_requests/projects/${projectId}/join?${params}`,
+  );
+}
+
+export async function approveJoinRequest(
+  requestId: number,
+): Promise<unknown> {
+  return api<unknown>(
+    `/project_requests/${requestId}/approve-join`,
+    { method: "POST" },
+  );
+}
+
+export async function rejectJoinRequest(
+  requestId: number,
+): Promise<unknown> {
+  return api<unknown>(
+    `/project_requests/${requestId}/reject-join`,
+    { method: "POST" },
+  );
+}
+
+export async function getWorkspaceProjectRequests(
+  workspaceId: number,
+  page = 1,
+  pageSize = 100,
+): Promise<PaginatedResponse<ProjectRequest>> {
+  const params = new URLSearchParams({
+    page: String(page),
+    page_size: String(pageSize),
+  });
+
+  return api<PaginatedResponse<ProjectRequest>>(
+    `/project_requests/workspaces/${workspaceId}?${params}`,
+  );
+}
+
+export async function getProjectRequests(
+  projectId: number,
+  page = 1,
+  pageSize = 100,
+): Promise<PaginatedResponse<ProjectRequest>> {
+  const params = new URLSearchParams({
+    page: String(page),
+    page_size: String(pageSize),
+  });
+
+  return api<PaginatedResponse<ProjectRequest>>(
+    `/project_requests/projects/${projectId}?${params}`,
+  );
+}
+
+export async function approveProjectRequest(
+  requestId: number,
+): Promise<unknown> {
+  return api<unknown>(`/project_requests/${requestId}/approve`, {
+    method: "POST",
+  });
+}
+
+export async function rejectProjectRequest(
+  requestId: number,
+): Promise<unknown> {
+  return api<unknown>(`/project_requests/${requestId}/reject`, {
+    method: "POST",
   });
 }

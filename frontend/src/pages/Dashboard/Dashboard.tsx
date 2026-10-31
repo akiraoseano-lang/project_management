@@ -1,6 +1,4 @@
-
 import {
-  ArrowDownRight,
   ArrowRight,
   ArrowUpRight,
   CheckCircle2,
@@ -9,258 +7,199 @@ import {
   FolderKanban,
   Layers3,
   ListTodo,
-  MoreHorizontal,
   Plus,
+  RefreshCw,
   Sparkles,
   Users,
+  XCircle,
 } from "lucide-react";
 
 import { useNavigate } from "react-router-dom";
 
 import { useAuth } from "../../contexts/AuthContext";
+import { useDashboard } from "../../hooks/useDashboard";
+
+import {
+  formatProjectDate,
+  getInitials,
+  getProjectHealth,
+  getProjectHealthLabel,
+} from "../../utils/project";
+
+import type { ProjectHealthState } from "../../utils/project";
+import type { TaskSummary } from "../../types/task";
+
 import styles from "./Dashboard.module.css";
 
-type ProjectStatus = "On Track" | "At Risk" | "Completed";
-type TaskStatus = "In Progress" | "To Do" | "Done";
+const PROJECT_COLORS = ["indigo", "blue", "green", "orange"] as const;
+const ACTIVITY_COLORS = ["purple", "blue", "orange"] as const;
 
-type Project = {
-  id: number;
-  name: string;
-  description: string;
-  progress: number;
-  tasksDone: number;
-  totalTasks: number;
-  color: string;
-  status: ProjectStatus;
+const TASK_STATUS_LABELS: Record<TaskSummary["status"], string> = {
+  TODO: "To Do",
+  IN_PROGRESS: "In Progress",
+  DONE: "Done",
 };
 
-type Task = {
-  id: number;
-  title: string;
-  project: string;
-  dueDate: string;
-  priority: "High" | "Medium" | "Low";
-  status: TaskStatus;
-};
+function getProjectStatusClass(health: ProjectHealthState) {
+  switch (health) {
+    case "COMPLETED":
+      return styles.statusCompleted;
+    case "ON_TRACK":
+      return styles.statusOnTrack;
+    case "AT_RISK":
+      return styles.statusAtRisk;
+    default:
+      return styles.statusNoTasks;
+  }
+}
 
-const statistics = [
-  {
-    label: "Total Workspaces",
-    value: "04",
-    change: "+1 this month",
-    trend: "up",
-    icon: Layers3,
-    color: "indigo",
-  },
-  {
-    label: "Active Projects",
-    value: "08",
-    change: "+2 this month",
-    trend: "up",
-    icon: FolderKanban,
-    color: "blue",
-  },
-  {
-    label: "My Tasks",
-    value: "12",
-    change: "5 due this week",
-    trend: "neutral",
-    icon: ListTodo,
-    color: "orange",
-  },
-  {
-    label: "Completed Tasks",
-    value: "24",
-    change: "+6 this week",
-    trend: "up",
-    icon: CheckCircle2,
-    color: "green",
-  },
-] as const;
+function getTaskStatusClass(status: TaskSummary["status"]) {
+  switch (status) {
+    case "IN_PROGRESS":
+      return styles.taskInProgress;
+    case "DONE":
+      return styles.taskDone;
+    default:
+      return styles.taskTodo;
+  }
+}
 
-const projects: Project[] = [
-  {
-    id: 1,
-    name: "Website Redesign",
-    description: "Marketing website revamp",
-    progress: 75,
-    tasksDone: 18,
-    totalTasks: 24,
-    color: "indigo",
-    status: "On Track",
-  },
-  {
-    id: 2,
-    name: "Mobile Application",
-    description: "Mobile app development",
-    progress: 48,
-    tasksDone: 12,
-    totalTasks: 25,
-    color: "blue",
-    status: "At Risk",
-  },
-  {
-    id: 3,
-    name: "API Development",
-    description: "Backend service integration",
-    progress: 90,
-    tasksDone: 27,
-    totalTasks: 30,
-    color: "green",
-    status: "On Track",
-  },
-  {
-    id: 4,
-    name: "Brand Identity",
-    description: "Visual identity and guidelines",
-    progress: 100,
-    tasksDone: 16,
-    totalTasks: 16,
-    color: "orange",
-    status: "Completed",
-  },
-];
+function formatRelativeTime(value: string) {
+  const date = new Date(value);
 
-const tasks: Task[] = [
-  {
-    id: 1,
-    title: "Finalize dashboard UI",
-    project: "Website Redesign",
-    dueDate: "Today",
-    priority: "High",
-    status: "In Progress",
-  },
-  {
-    id: 2,
-    title: "Review API documentation",
-    project: "API Development",
-    dueDate: "Tomorrow",
-    priority: "Medium",
-    status: "To Do",
-  },
-  {
-    id: 3,
-    title: "Implement authentication flow",
-    project: "Mobile Application",
-    dueDate: "Oct 18",
-    priority: "High",
-    status: "In Progress",
-  },
-  {
-    id: 4,
-    title: "Update brand guidelines",
-    project: "Brand Identity",
-    dueDate: "Completed",
-    priority: "Low",
-    status: "Done",
-  },
-];
+  if (Number.isNaN(date.getTime())) return "-";
 
-const activities = [
-  {
-    id: 1,
-    initials: "JD",
-    color: "purple",
-    title: "Jordan Davis",
-    action: "completed a task in",
-    target: "Website Redesign",
-    time: "10 minutes ago",
-  },
-  {
-    id: 2,
-    initials: "SL",
-    color: "blue",
-    title: "Sarah Lee",
-    action: "created a new task in",
-    target: "API Development",
-    time: "1 hour ago",
-  },
-  {
-    id: 3,
-    initials: "MK",
-    color: "orange",
-    title: "Michael Kim",
-    action: "updated the progress of",
-    target: "Mobile Application",
-    time: "3 hours ago",
-  },
-];
+  const diff = Date.now() - date.getTime();
+  const minutes = Math.floor(diff / 60_000);
+
+  if (minutes < 1) return "Baru saja";
+  if (minutes < 60) return `${minutes} menit lalu`;
+
+  const hours = Math.floor(minutes / 60);
+
+  if (hours < 24) return `${hours} jam lalu`;
+
+  const days = Math.floor(hours / 24);
+
+  if (days < 7) return `${days} hari lalu`;
+
+  return formatProjectDate(value);
+}
 
 const Dashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  const displayName = user?.name?.trim().split(/\s+/)[0] || "there";
+  const {
+    catalog,
+    overviewProjects,
+    myTasks,
+    myTaskTotal,
+    completedTaskTotal,
+    pendingMyTasks,
+    totalProjectTasks,
+    recentTasks,
+    loading,
+    error,
+    reload,
+  } = useDashboard();
 
-  const getProjectStatusClass = (status: ProjectStatus) => {
-    switch (status) {
-      case "On Track":
-        return styles.statusOnTrack;
-      case "At Risk":
-        return styles.statusAtRisk;
-      case "Completed":
-        return styles.statusCompleted;
-    }
-  };
+  const displayName =
+    user?.name?.trim().split(/\s+/)[0] || "there";
 
-  const getTaskStatusClass = (status: TaskStatus) => {
-    switch (status) {
-      case "In Progress":
-        return styles.taskInProgress;
-      case "To Do":
-        return styles.taskTodo;
-      case "Done":
-        return styles.taskDone;
-    }
-  };
-
-  const getPriorityClass = (priority: Task["priority"]) => {
-    switch (priority) {
-      case "High":
-        return styles.priorityHigh;
-      case "Medium":
-        return styles.priorityMedium;
-      case "Low":
-        return styles.priorityLow;
-    }
-  };
+  const statistics = [
+    {
+      label: "Total Workspace",
+      value: String(catalog.workspaces.length),
+      change: `${catalog.projects.length} project aktif`,
+      trend: "neutral",
+      icon: Layers3,
+      color: "indigo",
+    },
+    {
+      label: "Project Aktif",
+      value: String(catalog.projects.length),
+      change: `${totalProjectTasks} task di project`,
+      trend: "up",
+      icon: FolderKanban,
+      color: "blue",
+    },
+    {
+      label: "Task Saya",
+      value: String(myTaskTotal),
+      change: `${pendingMyTasks} belum selesai`,
+      trend: "neutral",
+      icon: ListTodo,
+      color: "orange",
+    },
+    {
+      label: "Task Selesai",
+      value: String(completedTaskTotal),
+      change: "Task kamu yang sudah selesai",
+      trend: "up",
+      icon: CheckCircle2,
+      color: "green",
+    },
+  ] as const;
 
   return (
     <div className={styles.dashboard}>
-      {/* Welcome section */}
       <section className={styles.welcome}>
         <div>
           <div className={styles.welcomeLabel}>
             <Sparkles size={15} />
-            YOUR WORKSPACE AT A GLANCE
+            RINGKASAN WORKSPACE KAMU
           </div>
 
           <h1>
-            Good day, {displayName}
+            Halo, {displayName}
             <span className={styles.wave}> 👋</span>
           </h1>
 
           <p>
-            Here's what's happening with your projects today.
+            Berikut aktivitas project dan task kamu hari ini.
           </p>
         </div>
 
-        <button
-          type="button"
-          className={styles.createButton}
-          onClick={() => navigate("/projects")}
-        >
-          <Plus size={18} />
-          Create Project
-        </button>
+        <div className={styles.welcomeActions}>
+          <button
+            type="button"
+            className={styles.refreshButton}
+            onClick={() => void reload()}
+            disabled={loading}
+          >
+            <RefreshCw size={16} />
+            Refresh
+          </button>
+
+          <button
+            type="button"
+            className={styles.createButton}
+            onClick={() => navigate("/projects")}
+          >
+            <Plus size={18} />
+            Buat Project
+          </button>
+        </div>
       </section>
 
-      <div className={styles.demoNotice}>
-        <CircleDashed size={15} />
-        Preview mode — dashboard metrics below are sample data.
-      </div>
+      {loading && (
+        <div className={styles.statusNotice}>
+          <CircleDashed size={15} />
+          Memuat data dashboard...
+        </div>
+      )}
 
-      {/* Statistics */}
+      {error && (
+        <div className={styles.errorNotice} role="alert">
+          <XCircle size={15} />
+          <span>{error}</span>
+          <button type="button" onClick={() => void reload()}>
+            Coba lagi
+          </button>
+        </div>
+      )}
+
       <section className={styles.statsGrid} aria-label="Statistics">
         {statistics.map((stat) => {
           const Icon = stat.icon;
@@ -273,21 +212,14 @@ const Dashboard = () => {
                 >
                   <Icon size={21} strokeWidth={1.9} />
                 </div>
-
-                <button
-                  type="button"
-                  className={styles.moreButton}
-                  aria-label={`More options for ${stat.label}`}
-                  onClick={() => console.info(stat.label)}
-                >
-                  <MoreHorizontal size={20} />
-                </button>
               </div>
 
               <p className={styles.statLabel}>{stat.label}</p>
 
               <div className={styles.statBottom}>
-                <strong className={styles.statValue}>{stat.value}</strong>
+                <strong className={styles.statValue}>
+                  {stat.value}
+                </strong>
 
                 <span
                   className={`${styles.statChange} ${
@@ -296,10 +228,8 @@ const Dashboard = () => {
                 >
                   {stat.trend === "up" ? (
                     <ArrowUpRight size={14} />
-                  ) : stat.trend === "neutral" ? (
-                    <Clock3 size={13} />
                   ) : (
-                    <ArrowDownRight size={14} />
+                    <Clock3 size={13} />
                   )}
                   {stat.change}
                 </span>
@@ -309,13 +239,12 @@ const Dashboard = () => {
         })}
       </section>
 
-      {/* Main dashboard content */}
       <section className={styles.mainGrid}>
         <div className={styles.panel}>
           <div className={styles.panelHeader}>
             <div>
-              <h2>Project Overview</h2>
-              <p>Track progress across your projects.</p>
+              <h2>Ringkasan Project</h2>
+              <p>Pantau progress seluruh project kamu.</p>
             </div>
 
             <button
@@ -323,138 +252,170 @@ const Dashboard = () => {
               className={styles.textButton}
               onClick={() => navigate("/projects")}
             >
-              View all
+              Lihat semua
               <ArrowRight size={16} />
             </button>
           </div>
 
-          <div className={styles.projectList}>
-            {projects.map((project) => (
-              <article className={styles.projectItem} key={project.id}>
-                <div className={styles.projectTop}>
-                  <div
-                    className={`${styles.projectIcon} ${
-                      styles[project.color]
-                    }`}
+          {overviewProjects.length === 0 ? (
+            <div className={styles.emptyPanel}>
+              <FolderKanban size={24} />
+              <h3>Belum ada project</h3>
+              <p>
+                Project yang kamu ikuti akan muncul di sini.
+              </p>
+            </div>
+          ) : (
+            <div className={styles.projectList}>
+              {overviewProjects.map((project, index) => {
+                const health = getProjectHealth(project);
+                const color =
+                  PROJECT_COLORS[index % PROJECT_COLORS.length];
+
+                return (
+                  <article
+                    className={styles.projectItem}
+                    key={project.id}
                   >
-                    <FolderKanban size={19} />
-                  </div>
+                    <div className={styles.projectTop}>
+                      <div
+                        className={`${styles.projectIcon} ${styles[color]}`}
+                      >
+                        <FolderKanban size={19} />
+                      </div>
 
-                  <div className={styles.projectDetails}>
-                    <h3>{project.name}</h3>
-                    <p>{project.description}</p>
-                  </div>
+                      <div className={styles.projectDetails}>
+                        <h3>{project.name}</h3>
+                        <p>
+                          {project.description?.trim() ||
+                            "Tanpa deskripsi"}
+                        </p>
+                      </div>
 
-                  <span
-                    className={`${styles.projectStatus} ${getProjectStatusClass(
-                      project.status
-                    )}`}
-                  >
-                    {project.status}
-                  </span>
-                </div>
+                      <span
+                        className={`${styles.projectStatus} ${getProjectStatusClass(
+                          health,
+                        )}`}
+                      >
+                        {getProjectHealthLabel(health)}
+                      </span>
+                    </div>
 
-                <div className={styles.progressInfo}>
-                  <span>Progress</span>
-                  <strong>{project.progress}%</strong>
-                </div>
+                    <div className={styles.progressInfo}>
+                      <span>Progress</span>
+                      <strong>{project.progress}%</strong>
+                    </div>
 
-                <div
-                  className={styles.progressTrack}
-                  role="progressbar"
-                  aria-label={`${project.name} progress`}
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-valuenow={project.progress}
-                >
-                  <div
-                    className={`${styles.progressBar} ${
-                      styles[`progress${project.color}`]
-                    }`}
-                    style={{ width: `${project.progress}%` }}
-                  />
-                </div>
+                    <div
+                      className={styles.progressTrack}
+                      role="progressbar"
+                      aria-label={`${project.name} progress`}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={project.progress}
+                    >
+                      <div
+                        className={`${styles.progressBar} ${
+                          styles[`progress${color}`]
+                        }`}
+                        style={{ width: `${project.progress}%` }}
+                      />
+                    </div>
 
-                <div className={styles.projectFooter}>
-                  <span>
-                    {project.tasksDone} of {project.totalTasks} tasks
-                  </span>
-                  <span>
-                    {project.totalTasks - project.tasksDone} remaining
-                  </span>
-                </div>
-              </article>
-            ))}
-          </div>
+                    <div className={styles.projectFooter}>
+                      <span>
+                        {project.done_tasks} dari{" "}
+                        {project.total_tasks} task
+                      </span>
+                      <span>
+                        {project.total_tasks - project.done_tasks}{" "}
+                        tersisa
+                      </span>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
         </div>
 
-        {/* Activity panel */}
         <aside className={styles.panel}>
           <div className={styles.panelHeader}>
             <div>
-              <h2>Recent Activity</h2>
-              <p>Latest updates from your team.</p>
+              <h2>Aktivitas Terbaru</h2>
+              <p>Task terbaru dari project kamu.</p>
             </div>
-
-            <button
-              type="button"
-              className={styles.iconAction}
-              aria-label="More activity options"
-              onClick={() => console.info("Activity options")}
-            >
-              <MoreHorizontal size={20} />
-            </button>
           </div>
 
-          <div className={styles.activityList}>
-            {activities.map((activity) => (
-              <article className={styles.activityItem} key={activity.id}>
-                <div
-                  className={`${styles.activityAvatar} ${
-                    styles[activity.color]
-                  }`}
-                >
-                  {activity.initials}
-                </div>
+          {recentTasks.length === 0 ? (
+            <div className={styles.emptyPanel}>
+              <ListTodo size={24} />
+              <h3>Belum ada aktivitas</h3>
+              <p>Task terbaru akan muncul di sini.</p>
+            </div>
+          ) : (
+            <div className={styles.activityList}>
+              {recentTasks.map((task, index) => {
+                const actor =
+                  task.assignee_name ??
+                  task.creator_name ??
+                  "Task";
+                const color =
+                  ACTIVITY_COLORS[index % ACTIVITY_COLORS.length];
 
-                <div className={styles.activityContent}>
-                  <p>
-                    <strong>{activity.title}</strong>{" "}
-                    {activity.action}{" "}
-                    <span>{activity.target}</span>
-                  </p>
+                return (
+                  <article
+                    className={styles.activityItem}
+                    key={task.id}
+                  >
+                    <div
+                      className={`${styles.activityAvatar} ${
+                        styles[color]
+                      }`}
+                    >
+                      {getInitials(actor)}
+                    </div>
 
-                  <time>{activity.time}</time>
-                </div>
-              </article>
-            ))}
-          </div>
+                    <div className={styles.activityContent}>
+                      <p>
+                        <strong>{task.title}</strong> di{" "}
+                        <span>{task.project_name}</span>
+                      </p>
+
+                      <time>
+                        {formatRelativeTime(task.updated_at)}
+                      </time>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
 
           <button
             type="button"
             className={styles.activityButton}
-            onClick={() => console.info("Navigate to activity log")}
+            onClick={() => navigate("/tasks")}
           >
-            View activity log
+            Lihat semua task
             <ArrowRight size={16} />
           </button>
         </aside>
       </section>
 
-      {/* Task table */}
       <section className={styles.panel}>
         <div className={styles.panelHeader}>
           <div>
-            <h2>My Tasks</h2>
-            <p>Keep track of what needs your attention.</p>
+            <h2>Task Saya</h2>
+            <p>Pantau hal yang perlu kamu kerjakan.</p>
           </div>
 
           <button
             type="button"
             className={styles.textButton}
-            onClick={() => navigate("/tasks")}
+            onClick={() => navigate("/my-tasks")}
           >
-            View all tasks
+            Lihat semua task
             <ArrowRight size={16} />
           </button>
         </div>
@@ -463,57 +424,67 @@ const Dashboard = () => {
           <table className={styles.taskTable}>
             <thead>
               <tr>
-                <th>Task name</th>
+                <th>Nama task</th>
                 <th>Project</th>
-                <th>Priority</th>
-                <th>Due date</th>
+                <th>Checklist</th>
+                <th>Diperbarui</th>
                 <th>Status</th>
               </tr>
             </thead>
 
             <tbody>
-              {tasks.map((task) => (
-                <tr key={task.id}>
-                  <td>
-                    <div className={styles.taskName}>
-                      <span
-                        className={`${styles.taskCheck} ${
-                          task.status === "Done" ? styles.taskCheckDone : ""
-                        }`}
-                      >
-                        {task.status === "Done" && (
-                          <CheckCircle2 size={16} />
-                        )}
-                      </span>
-                      <span>{task.title}</span>
-                    </div>
-                  </td>
-
-                  <td className={styles.projectCell}>{task.project}</td>
-
-                  <td>
-                    <span
-                      className={`${styles.priority} ${getPriorityClass(
-                        task.priority
-                      )}`}
-                    >
-                      {task.priority}
-                    </span>
-                  </td>
-
-                  <td className={styles.dueDate}>{task.dueDate}</td>
-
-                  <td>
-                    <span
-                      className={`${styles.taskStatus} ${getTaskStatusClass(
-                        task.status
-                      )}`}
-                    >
-                      {task.status}
-                    </span>
+              {myTasks.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className={styles.emptyCell}>
+                    Belum ada task yang di-assign ke kamu.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                myTasks.map((task) => (
+                  <tr key={task.id}>
+                    <td>
+                      <div className={styles.taskName}>
+                        <span
+                          className={`${styles.taskCheck} ${
+                            task.status === "DONE"
+                              ? styles.taskCheckDone
+                              : ""
+                          }`}
+                        >
+                          {task.status === "DONE" && (
+                            <CheckCircle2 size={16} />
+                          )}
+                        </span>
+                        <span>{task.title}</span>
+                      </div>
+                    </td>
+
+                    <td className={styles.projectCell}>
+                      {task.project_name}
+                    </td>
+
+                    <td>
+                      {task.checklist_total > 0
+                        ? `${task.checklist_done}/${task.checklist_total}`
+                        : "-"}
+                    </td>
+
+                    <td className={styles.dueDate}>
+                      {formatRelativeTime(task.updated_at)}
+                    </td>
+
+                    <td>
+                      <span
+                        className={`${styles.taskStatus} ${getTaskStatusClass(
+                          task.status,
+                        )}`}
+                      >
+                        {TASK_STATUS_LABELS[task.status] ?? task.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
@@ -521,10 +492,10 @@ const Dashboard = () => {
 
       <footer className={styles.dashboardFooter}>
         <span>NEXUS Project Management</span>
-        <span>Built for better teamwork.</span>
+        <span>Dibuat untuk kolaborasi tim.</span>
         <span className={styles.footerTeam}>
           <Users size={14} />
-          Team workspace
+          Ruang kerja tim
         </span>
       </footer>
     </div>

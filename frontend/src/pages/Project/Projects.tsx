@@ -9,11 +9,11 @@ import {
   X,
 } from "lucide-react";
 
+import ConfirmDeleteModal from "../../components/common/ConfirmDeleteModal";
+import Pagination from "../../components/common/Pagination";
 import ProjectCard from "../../components/projects/ProjectCard";
 import ProjectToolbar from "../../components/projects/ProjectToolbar";
-import ProjectPagination from "../../components/projects/ProjectPagination";
 import ProjectModal from "../../components/projects/ProjectModal";
-import ProjectDeleteModal from "../../components/projects/ProjectDeleteModal";
 
 import { useAuth } from "../../contexts/AuthContext";
 import { useProjects } from "../../hooks/useProjects";
@@ -321,10 +321,11 @@ export default function Projects() {
               ))}
             </div>
 
-            <ProjectPagination
+            <Pagination
               page={page}
               totalPages={totalPages}
               onPageChange={setPage}
+              ariaLabel="Pagination project"
             />
           </>
         ) : null}
@@ -351,8 +352,17 @@ export default function Projects() {
         }
       />
 
-      <ProjectDeleteModal
-        project={deleteTarget}
+      <ConfirmDeleteModal
+        open={deleteTarget !== null}
+        title="Hapus project?"
+        description={
+          <>
+            Kamu yakin ingin menghapus project{" "}
+            <strong>{deleteTarget?.name}</strong>? Seluruh task dan data
+            project ini akan ikut terhapus dan tidak bisa dikembalikan.
+          </>
+        }
+        confirmLabel="Hapus project"
         onClose={() => setDeleteTarget(null)}
         onConfirm={handleConfirmDelete}
       />

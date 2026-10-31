@@ -1,34 +1,45 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, LoaderCircle, Trash2, X } from "lucide-react";
+import type { ReactNode } from "react";
+import {
+  AlertTriangle,
+  LoaderCircle,
+  Trash2,
+  X,
+} from "lucide-react";
 
-import styles from "./WorkspaceDeleteModal.module.css";
+import styles from "./ConfirmDeleteModal.module.css";
 
-interface WorkspaceDeleteModalProps {
-  workspace: {
-    id: string;
-    name: string;
-  } | null;
+interface ConfirmDeleteModalProps {
+  open: boolean;
+  title: string;
+  description: ReactNode;
+  confirmLabel?: string;
+  cancelLabel?: string;
   onClose: () => void;
   onConfirm: () => Promise<void>;
 }
 
-export default function WorkspaceDeleteModal({
-  workspace,
+export default function ConfirmDeleteModal({
+  open,
+  title,
+  description,
+  confirmLabel = "Hapus",
+  cancelLabel = "Batal",
   onClose,
   onConfirm,
-}: WorkspaceDeleteModalProps) {
+}: ConfirmDeleteModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (workspace) {
+    if (open) {
       setLoading(false);
       setError("");
     }
-  }, [workspace?.id, workspace?.name]);
+  }, [open]);
 
   useEffect(() => {
-    if (!workspace) return;
+    if (!open) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape" && !loading) {
@@ -41,9 +52,9 @@ export default function WorkspaceDeleteModal({
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [workspace, loading, onClose]);
+  }, [open, loading, onClose]);
 
-  if (!workspace) return null;
+  if (!open) return null;
 
   const handleConfirm = async () => {
     if (loading) return;
@@ -57,7 +68,7 @@ export default function WorkspaceDeleteModal({
       setError(
         err instanceof Error
           ? err.message
-          : "Workspace gagal dihapus. Silakan coba lagi.",
+          : "Tindakan gagal. Silakan coba lagi.",
       );
     } finally {
       setLoading(false);
@@ -77,8 +88,8 @@ export default function WorkspaceDeleteModal({
         className={styles.modal}
         role="alertdialog"
         aria-modal="true"
-        aria-labelledby="delete-workspace-title"
-        aria-describedby="delete-workspace-description"
+        aria-labelledby="confirm-delete-title"
+        aria-describedby="confirm-delete-description"
       >
         <header className={styles.header}>
           <div className={styles.warningIcon}>
@@ -97,14 +108,8 @@ export default function WorkspaceDeleteModal({
         </header>
 
         <div className={styles.body}>
-          <h2 id="delete-workspace-title">Hapus workspace?</h2>
-
-          <p id="delete-workspace-description">
-            Lu yakin ingin menghapus workspace{" "}
-            <strong>{workspace.name}</strong>? Tindakan ini mungkin
-            memengaruhi data yang terkait dengan workspace tersebut.
-            Pastikan lu sudah memeriksa data sebelum melanjutkan.
-          </p>
+          <h2 id="confirm-delete-title">{title}</h2>
+          <p id="confirm-delete-description">{description}</p>
 
           {error && (
             <div className={styles.error} role="alert">
@@ -120,7 +125,7 @@ export default function WorkspaceDeleteModal({
             onClick={onClose}
             disabled={loading}
           >
-            Batal
+            {cancelLabel}
           </button>
 
           <button
@@ -132,12 +137,12 @@ export default function WorkspaceDeleteModal({
             {loading ? (
               <>
                 <LoaderCircle size={16} className={styles.spinner} />
-                Menghapus...
+                Memproses...
               </>
             ) : (
               <>
                 <Trash2 size={16} />
-                Hapus workspace
+                {confirmLabel}
               </>
             )}
           </button>

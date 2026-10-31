@@ -47,3 +47,7 @@ class WorkspaceResponse(BaseModel):
     model_config = ConfigDict(
         from_attributes=True
     )
+
+class WorkspaceDiscoverResponse(WorkspaceResponse):
+    is_member: bool
+    join_status: str | None = None

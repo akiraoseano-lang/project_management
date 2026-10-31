@@ -85,3 +85,41 @@ export type ProjectHealth =
   | "AT_RISK"
   | "COMPLETED"
   | "NO_TASKS";
+
+export type ProjectRequestStatus =
+  | "PENDING"
+  | "APPROVED"
+  | "REJECTED";
+
+export type ProjectRequestAction = "CREATE" | "JOIN";
+
+export interface ProjectJoinRequest {
+  id: number;
+  project_id: number;
+  user_id: number;
+  name: string;
+  email: string;
+  created_at: string;
+}
+
+export interface ProjectRequest {
+  id: number;
+  project_id: number;
+  project_name: string;
+  requested_by: number;
+  requester_name: string;
+  requester_email: string;
+  action: ProjectRequestAction;
+  status: ProjectRequestStatus;
+  reviewed_by: number | null;
+  reviewer_name: string | null;
+  created_at: string;
+  reviewed_at: string | null;
+}
+
+export interface ProjectJoinResult {
+  message: string;
+  request_id: number;
+  project_id: number;
+  status: string;
+}

@@ -17,9 +17,11 @@ import {
   Users,
 } from "lucide-react";
 
-import ProjectDeleteModal from "../../components/projects/ProjectDeleteModal";
+import ConfirmDeleteModal from "../../components/common/ConfirmDeleteModal";
+import Pagination from "../../components/common/Pagination";
+import ProjectMembersPanel from "../../components/projects/ProjectMembersPanel";
 import ProjectModal from "../../components/projects/ProjectModal";
-import ProjectPagination from "../../components/projects/ProjectPagination";
+import ProjectRequestsPanel from "../../components/projects/ProjectRequestsPanel";
 
 import { useAuth } from "../../contexts/AuthContext";
 import { useProjectDetail } from "../../hooks/useProjectDetail";
@@ -729,63 +731,33 @@ export default function ProjectDetail() {
               </table>
             </div>
 
-            <ProjectPagination
+            <Pagination
               page={page}
               totalPages={totalPages}
               onPageChange={setPage}
+              ariaLabel="Pagination task project"
             />
           </>
         )}
       </section>
 
-      <section className={styles.panel}>
-        <div className={styles.panelHeader}>
-          <div>
-            <h2>Project Members</h2>
-            <p>Orang-orang yang tergabung di project ini.</p>
-          </div>
-          <span className={styles.panelCount}>
-            {members.length} member
-          </span>
-        </div>
+      <ProjectMembersPanel
+        projectId={project.id}
+        projectOwnerId={project.owner_id}
+        currentUserId={user?.id}
+        workspaceRole={analytics?.role ?? "COLLABORATOR"}
+        members={members}
+        workspaceMembers={analytics?.members ?? []}
+        onChanged={reload}
+        onLeft={() => navigate("/projects")}
+      />
 
-        {members.length === 0 ? (
-          <div className={styles.emptyPanel}>
-            <Users size={24} />
-            <h3>Belum ada member</h3>
-            <p>Anggota project akan muncul di sini.</p>
-          </div>
-        ) : (
-          <div className={styles.memberGrid}>
-            {members.map((member) => (
-              <article className={styles.memberCard} key={member.id}>
-                <span className={styles.memberAvatar}>
-                  {getInitials(member.name)}
-                </span>
-
-                <div className={styles.memberInfo}>
-                  <strong>{member.name}</strong>
-                  <span>{member.email || "Tanpa email"}</span>
-                </div>
-
-                <span
-                  className={`${styles.memberRole} ${
-                    member.role === "OWNER"
-                      ? styles.roleOwner
-                      : member.role === "ADMIN"
-                        ? styles.roleAdmin
-                        : styles.roleCollaborator
-                  }`}
-                >
-                  {ROLE_LABELS[member.role ?? ""] ??
-                    member.role ??
-                    "Member"}
-                </span>
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
+      <ProjectRequestsPanel
+        projectId={project.id}
+        projectOwnerId={project.owner_id}
+        currentUserId={user?.id}
+        onChanged={reload}
+      />
 
       <ProjectModal
         open={editOpen}
@@ -810,15 +782,17 @@ export default function ProjectDetail() {
         onSubmit={handleUpdate}
       />
 
-      <ProjectDeleteModal
-        project={
-          deleteOpen
-            ? {
-                id: String(project.id),
-                name: project.name,
-              }
-            : null
+      <ConfirmDeleteModal
+        open={deleteOpen}
+        title="Hapus project?"
+        description={
+          <>
+            Kamu yakin ingin menghapus project{" "}
+            <strong>{project.name}</strong>? Seluruh task dan data
+            project ini akan ikut terhapus dan tidak bisa dikembalikan.
+          </>
         }
+        confirmLabel="Hapus project"
         onClose={() => setDeleteOpen(false)}
         onConfirm={handleDelete}
       />

@@ -25,3 +25,6 @@ class WorkspaceRequestResponse(BaseModel):
     reviewed_by: int | None
     created_at: datetime
     reviewed_at: datetime | None
+    requester_name: str | None = None
+    requester_email: str | None = None
+    target_user_name: str | None = None

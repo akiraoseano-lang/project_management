@@ -8,9 +8,9 @@ import {
   X,
 } from "lucide-react";
 
+import Pagination from "../../components/common/Pagination";
 import TaskDrawer from "../../components/tasks/TaskDrawer";
 import TaskModal from "../../components/tasks/TaskModal";
-import TaskPagination from "../../components/tasks/TaskPagination";
 import TaskTable from "../../components/tasks/TaskTable";
 import TaskToolbar from "../../components/tasks/TaskToolbar";
 
@@ -431,10 +431,11 @@ export default function Tasks({ mode }: TasksProps) {
         />
 
         {!loading && !error && tasks.length > 0 && (
-          <TaskPagination
+          <Pagination
             page={page}
             totalPages={totalPages}
             onPageChange={setPage}
+            ariaLabel="Pagination task"
           />
         )}
       </section>
