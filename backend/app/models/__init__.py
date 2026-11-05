@@ -8,6 +8,7 @@ from app.models.project_member import ProjectMember
 from app.models.task import Task
 from app.models.task_checklist import TaskCheckList
 from app.models.project_request import ProjectRequest
+from app.models.activity_logs import ActivityLogs
 
 __all__ = [
     "User",
@@ -19,5 +20,6 @@ __all__ = [
     "ProjectMember",
     "Task",
     "TaskCheckList",
-    "ProjectRequest"
+    "ProjectRequest",
+    "ActivityLogs"
 ]

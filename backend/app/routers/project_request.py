@@ -14,6 +14,7 @@ from app.utils.workspace_permission import get_workspace_member
 from app.utils.pagination import get_pagination
 from app.schemas.project_request import ProjectJoinRequestResponse, ProjectRequestResponse
 from app.schemas.pagination import PaginatedResponse
+from app.services.activity_log import log_activity
 
 Reviewer = aliased(User)
 
@@ -107,6 +108,21 @@ def approve_project_request(
     request.reviewed_by = current_user.id
     request.reviewed_at = datetime.now(timezone.utc)
 
+    log_activity(
+        db=db,
+        workspace_id=project.workspace_id,
+        project_id=project.id,
+        actor_id=current_user.id,
+        action="PROJECT_CREATED",
+        entity_type="PROJECT",
+        entity_id=current_user.id,
+        details={
+            "project_name": project.name,
+            "created_by": request.requested_by,
+            "approved_by": current_user.id
+        }
+    )
+
     db.commit()
     db.refresh(project)
 
@@ -182,6 +198,22 @@ def reject_project_request(
     request.status = "REJECTED"
     request.reviewed_by = current_user.id
     request.reviewed_at = datetime.now(timezone.utc)
+
+    log_activity(
+        db=db,
+        workspace_id=project.workspace_id,
+        project_id=project.id,
+        actor_id=current_user.id,
+        action="REQUEST_REJECTED",
+        entity_type="PROJECT_REQUEST",
+        entity_id=request.id,
+        details={
+            "action": "CREATE",
+            "project_name": project.name,
+            "requested_by": request.requested_by,
+            "rejected_by": current_user.id
+        }
+    )
 
     db.commit()
     db.refresh(project)
@@ -370,6 +402,14 @@ def approve_join_request(
             detail="User is already a member of this project"
         )
 
+    requester = db.get(User, request.requested_by)
+
+    if requester is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Requester not found"
+        )
+
     project_member = ProjectMember(
         project_id=project.id,
         user_id=request.requested_by,
@@ -381,6 +421,24 @@ def approve_join_request(
     request.status = "APPROVED"
     request.reviewed_by = current_user.id
     request.reviewed_at = datetime.now(timezone.utc)
+
+    log_activity(
+        db=db,
+        workspace_id=project.workspace_id,
+        project_id=project.id,
+        actor_id=current_user.id,
+        action="PROJECT_MEMBER_ADDED",
+        entity_type="PROJECT_MEMBER",
+        entity_id=requester.id,
+        details={
+            "project_name": project.name,
+            "member_id": requester.id,
+            "member_name": requester.name,
+            "member_email": requester.email,
+            "added_by": current_user.id,
+            "source": "JOIN_REQUEST"
+        }
+    )
 
     db.commit()
 
@@ -451,6 +509,22 @@ def reject_join_request(
     request.status = "REJECTED"
     request.reviewed_by = current_user.id
     request.reviewed_at = datetime.now(timezone.utc)
+
+    log_activity(
+        db=db,
+        workspace_id=project.workspace_id,
+        project_id=project.id,
+        actor_id=current_user.id,
+        action="REQUEST_REJECTED",
+        entity_type="PROJECT_REQUEST",
+        entity_id=request.id,
+        details={
+            "action": "JOIN",
+            "project_name": project.name,
+            "requested_by": request.requested_by,
+            "rejected_by": current_user.id
+        }
+    )
 
     db.commit()
     db.refresh(request)

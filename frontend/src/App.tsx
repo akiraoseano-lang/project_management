@@ -13,6 +13,7 @@ import Profile from "./components/profile";
 import ProfilePhotoPreview from "./components/profile/PhotoPriview";
 import Workspaces from "./pages/Workspace/Workspace";
 import WorkspaceDetail from "./pages/Workspace/WorkspaceDetail";
+import ActivityLog from "./pages/Activity";
 import Projects from "./pages/Project/Projects";
 import ProjectDetail from "./pages/Project/ProjectDetail";
 import Tasks from "./pages/Task/Tasks";
@@ -40,6 +41,7 @@ const App = () => {
             path="/workspaces/:workspaceId"
             element={<WorkspaceDetail />}
           />
+          <Route path="/activity" element={<ActivityLog />} />
           <Route path="/projects" element={<Projects />} />
           <Route
             path="/projects/:projectId"

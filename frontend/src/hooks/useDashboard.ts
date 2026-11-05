@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { getProjectCatalog } from "../services/projectService";
-import { getAllTasks, getMyTasks } from "../services/taskService";
+import { getMyTasks } from "../services/taskService";
+
+import { useActivityLog } from "./useActivityLog";
 
 import type {
   ProjectCatalog,
@@ -20,7 +22,6 @@ export function useDashboard() {
   const [myTasks, setMyTasks] = useState<TaskSummary[]>([]);
   const [myTaskTotal, setMyTaskTotal] = useState(0);
   const [completedTaskTotal, setCompletedTaskTotal] = useState(0);
-  const [recentTasks, setRecentTasks] = useState<TaskSummary[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -30,25 +31,22 @@ export function useDashboard() {
     setError(null);
 
     try {
-      const [catalogResult, myResult, completedResult, recentResult] =
+      const [catalogResult, myResult, completedResult] =
         await Promise.all([
           getProjectCatalog(),
           getMyTasks({ page: 1, pageSize: 5 }),
           getMyTasks({ status: "DONE", page: 1, pageSize: 1 }),
-          getAllTasks({ page: 1, pageSize: 5 }),
         ]);
 
       setCatalog(catalogResult);
       setMyTasks(myResult.items);
       setMyTaskTotal(myResult.total);
       setCompletedTaskTotal(completedResult.total);
-      setRecentTasks(recentResult.items);
     } catch (err) {
       setCatalog(EMPTY_CATALOG);
       setMyTasks([]);
       setMyTaskTotal(0);
       setCompletedTaskTotal(0);
-      setRecentTasks([]);
       setError(
         err instanceof Error
           ? err.message
@@ -62,6 +60,18 @@ export function useDashboard() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const activityWorkspaceId = catalog.workspaces[0]?.id ?? null;
+
+  const {
+    activities: recentActivities,
+    loading: activitiesLoading,
+    error: activitiesError,
+    reload: reloadActivities,
+  } = useActivityLog(activityWorkspaceId, {
+    pageSize: 5,
+    fetchLimit: 8,
+  });
 
   const overviewProjects = useMemo(
     () => catalog.projects.slice(0, 4),
@@ -82,6 +92,11 @@ export function useDashboard() {
     0,
   );
 
+  const reload = useCallback(() => {
+    void load();
+    void reloadActivities();
+  }, [load, reloadActivities]);
+
   return {
     catalog,
     overviewProjects,
@@ -90,10 +105,12 @@ export function useDashboard() {
     completedTaskTotal,
     pendingMyTasks,
     totalProjectTasks,
-    recentTasks,
+    recentActivities,
+    activitiesLoading,
+    activitiesError,
     loading,
     error,
-    reload: load,
+    reload,
   };
 }
 

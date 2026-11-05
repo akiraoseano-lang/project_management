@@ -23,6 +23,7 @@ from app.dependencies.auth import get_current_user
 from app.models.project import Project
 from app.models.project_member import ProjectMember
 from app.models.task import Task
+from app.services.activity_log import log_activity
 from app.utils.pagination import get_pagination
 
 from app.utils.workspace_permission import get_workspace_member
@@ -50,6 +51,18 @@ def create_workspace(
 
     db.add(workspace)
     db.flush()
+
+    log_activity(
+        db=db,
+        workspace_id=workspace.id,
+        actor_id=current_user.id,
+        action="WORKSPACE_CREATED",
+        entity_type="WORKSPACE",
+        entity_id=workspace.id,
+        details={
+            "workspace_name": workspace.name
+        }
+    )
 
     workspace_member = WorkspaceMember(
         workspace_id=workspace.id,
@@ -340,6 +353,18 @@ def update_workspace(
     for field, value in update_data.items():
         setattr(workspace, field, value)
 
+    log_activity(
+        db=db,
+        workspace_id=workspace.id,
+        actor_id=current_user.id,
+        action="WORKSPACE_UPDATED",
+        entity_type="WORKSPACE",
+        entity_id=workspace.id,
+        details={
+            "workspace_name": workspace.name,
+        }
+    )
+
     db.commit()
     db.refresh(workspace)
 
@@ -378,6 +403,18 @@ def delete_workspace(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only workspace owner can delete this workspace"
         )
+
+    log_activity(
+        db=db,
+        workspace_id=workspace.id,
+        actor_id=current_user.id,
+        action="WORKSPACE_DELETED",
+        entity_type="WORKSPACE",
+        entity_id=workspace.id,
+        details={
+            "workspace_name": workspace.name
+        }
+    )
 
     db.delete(workspace)
     db.commit()
@@ -513,6 +550,22 @@ def add_workspace_member(
     )
 
     db.add(member)
+
+    log_activity(
+        db=db,
+        workspace_id=workspace.id,
+        actor_id=current_user.id,
+        action="MEMBER_ADDED",
+        entity_type="WORKSPACE",
+        entity_id=payload.user_id,
+        details={
+            "member_id": payload.user_id,
+            "member_name": user.name,
+            "member_email": user.email,
+            "role": "COLLABORATOR"
+        }
+    )
+
     db.commit()
     db.refresh(member)
 
@@ -590,7 +643,23 @@ def update_workspace_member_role(
             detail="User already has this role"
         )
 
+    old_role = member.role
+
     member.role = new_role
+
+    log_activity(
+        db=db,
+        workspace_id=workspace.id,
+        actor_id=current_user.id,
+        action="MEMBER_ROLE_CHANGED",
+        entity_type="WORKSPACE_MEMBER",
+        entity_id=user_id,
+        details={
+            "member_id": user_id,
+            "old_role": old_role,
+            "new_role": new_role,
+        }
+    )
 
     db.commit()
     db.refresh(member)
@@ -684,6 +753,21 @@ def leave_workspace(
     for project_member in project_memberships:
         db.delete(project_member)
 
+    log_activity(
+        db=db,
+        workspace_id=workspace.id,
+        actor_id=current_user.id,
+        action="MEMBER_LEFT",
+        entity_type="WORKSPACE_MEMBER",
+        entity_id=current_user.id,
+        details={
+            "member_id": current_user.id,
+            "member_name": current_user.name,
+            "member_email": current_user.email,
+            "role": membership.role
+        }
+    )
+
     db.delete(membership)
 
     db.commit()
@@ -726,7 +810,9 @@ def remove_workspace_member(
         )
 
     member = db.execute(
-        select(WorkspaceMember).where(
+        select(WorkspaceMember)
+        .options(joinedload(WorkspaceMember.user))
+        .where(
             WorkspaceMember.workspace_id == workspace_id,
             WorkspaceMember.user_id == user_id
         )
@@ -775,6 +861,21 @@ def remove_workspace_member(
 
     for project_member in project_memberships:
         db.delete(project_member)
+
+    log_activity(
+        db=db,
+        workspace_id=workspace.id,
+        actor_id=current_user.id,
+        action="MEMBER_REMOVED",
+        entity_type="WORKSPACE_MEMBER",
+        entity_id=user_id,
+        details={
+            "member_id": user_id,
+            "member_name": member.user.name,
+            "member_email": member.user.email,
+            "role": member.role
+        }
+    )
 
     db.delete(member)
 
@@ -842,6 +943,24 @@ def request_join_workspace(
     )
 
     db.add(join_request)
+    db.flush()
+
+    log_activity(
+        db=db,
+        workspace_id=workspace.id,
+        actor_id=current_user.id,
+        action="REQUEST_CREATED",
+        entity_type="WORKSPACE_REQUEST",
+        entity_id=join_request.id,
+        details={
+            "request_id": join_request.id,
+            "request_action": "JOIN",
+            "requester_id": current_user.id,
+            "requester_name": current_user.name,
+            "status": "PENDING "
+        }
+    )
+
     db.commit()
     db.refresh(join_request)
 
@@ -898,6 +1017,26 @@ def create_workspace_request(
     )
 
     db.add(workspace_request)
+    db.flush()
+
+    log_activity(
+        db=db,
+        workspace_id=workspace.id,
+        actor_id=current_user.id,
+        action="REQUEST_CREATED",
+        entity_type="WORKSPACE_REQUEST",
+        entity_id=workspace_request.id,
+        details={
+            "request_id": workspace_request.id,
+            "request_action": workspace_request.action,
+            "requester_id": current_user.id,
+            "requester_name": current_user.name,
+            "target_user_id": workspace_request.target_user_id,
+            "payload": workspace_request.payload,
+            "status": "PENDING"
+        }
+    )
+
     db.commit()
     db.refresh(workspace_request)
 
@@ -1201,6 +1340,24 @@ def approve_workspace_request(
     workspace_request.reviewed_by = current_user.id
     workspace_request.reviewed_at = datetime.now(timezone.utc)
 
+    log_activity(
+        db=db,
+        workspace_id=workspace.id,
+        actor_id=current_user.id,
+        action="REQUEST_APPROVED",
+        entity_type="WORKSPACE_REQUEST",
+        entity_id=workspace_request.id,
+        details={
+            "request_id": workspace_request.id,
+            "request_action": workspace_request.action,
+            "requester_id": workspace_request.requested_by,
+            "targer_user_id": workspace_request.target_user_id,
+            "reviewer_id": current_user.id,
+            "status": "APPROVED",
+            "payload": workspace_request.payload,
+        }
+    )
+
     db.commit()
     db.refresh(workspace_request)
 
@@ -1268,6 +1425,24 @@ def reject_workspace_request(
     workspace_request.status = "REJECTED"
     workspace_request.reviewed_by = current_user.id
     workspace_request.reviewed_at = datetime.now(timezone.utc)
+
+    log_activity(
+        db=db,
+        workspace_id=workspace.id,
+        actor_id=current_user.id,
+        action="REQUEST_REJECTED",
+        entity_type="WORKSPACE_REQUEST",
+        entity_id=workspace_request.id,
+        details={
+            "request_id": workspace_request.id,
+            "request_action": workspace_request.action,
+            "requester_id": workspace_request.requested_by,
+            "target_user_id": workspace_request.target_user_id,
+            "reviewer_id": current_user.id,
+            "status": "REJECTED",
+            "payload": workspace_request.payload,
+        }
+    )
 
     db.commit()
     db.refresh(workspace_request)

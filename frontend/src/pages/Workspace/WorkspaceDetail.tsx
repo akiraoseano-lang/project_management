@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 
 import Pagination from "../../components/common/Pagination";
+import WorkspaceActivityPanel from "../../components/workspaces/WorkspaceActivityPanel";
 import WorkspaceMembersPanel from "../../components/workspaces/WorkspaceMembersPanel";
 import WorkspaceModal from "../../components/workspaces/WorkspaceModal";
 import WorkspaceRequestsPanel from "../../components/workspaces/WorkspaceRequestsPanel";
@@ -893,6 +894,11 @@ export default function WorkspaceDetail() {
           </>
         )}
       </section>
+
+      <WorkspaceActivityPanel
+        workspaceId={id as number}
+        workspaceName={workspace.name}
+      />
 
       <WorkspaceMembersPanel
         workspaceId={id as number}

@@ -15,6 +15,7 @@ from app.schemas.pagination import PaginatedResponse
 from app.utils.workspace_permission import get_workspace_member
 from app.utils.pagination import get_pagination
 from app.models.task import Task
+from app.services.activity_log import log_activity
 
 router = APIRouter(
     prefix="/projects",
@@ -88,6 +89,21 @@ def create_project(
 
         db.add(project_member)
 
+        log_activity(
+            db=db,
+            workspace_id=project.workspace_id,
+            project_id=project.id,
+            actor_id=current_user.id,
+            action="PROJECT_CREATED",
+            entity_type="PROJECT",
+            entity_id=project.id,
+            details={
+                "project_name": project.name,
+                "created_by": current_user.id,
+                "status": "ACTIVE"
+            }
+        )
+
         db.commit()
         db.refresh(project)
 
@@ -113,6 +129,22 @@ def create_project(
     )
 
     db.add(project_request)
+    db.flush()
+
+    log_activity(
+        db=db,
+        workspace_id=project.workspace_id,
+        project_id=project.id,
+        actor_id=current_user.id,
+        action="REQUEST_CREATED",
+        entity_type="PROJECT_REQUEST",
+        entity_id=project_request.id,
+        details={
+            "action": "CREATE",
+            "project_name": project.name,
+            "requested_by": current_user.id
+        }
+    )
 
     db.commit()
     db.refresh(project)
@@ -194,6 +226,23 @@ def request_join_project(
     )
 
     db.add(request)
+    db.flush()
+
+    log_activity(
+        db=db,
+        workspace_id=project.workspace_id,
+        project_id=project.id,
+        actor_id=current_user.id,
+        action="REQUEST_CREATED",
+        entity_type="PROJECT_REQUEST",
+        entity_id=request.id,
+        details={
+            "action": "JOIN",
+            "project_name": project.name,
+            "requested_by": current_user.id
+        }
+    )
+
     db.commit()
     db.refresh(request)
 
@@ -369,6 +418,14 @@ def remove_project_member(
             detail="Project member not found"
         )
 
+    user = db.get(User, user_id)
+
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
     tasks = db.scalars(
         select(Task).where(
             Task.project_id == project_id,
@@ -379,6 +436,23 @@ def remove_project_member(
     for task in tasks:
         task.assigned_to = None
         task.status = "TODO"
+
+    log_activity(
+        db=db,
+        workspace_id=project.workspace_id,
+        project_id=project.id,
+        actor_id=current_user.id,
+        action="PROJECT_MEMBER_REMOVED",
+        entity_type="PROJECT_MEMBER",
+        entity_id=user.id,
+        details={
+            "project_name": project.name,
+            "member_id": user.id,
+            "member_name": user.name,
+            "removed_by": current_user.id,
+            "unassigned_tasks": len(tasks)
+        }
+    )
 
     db.delete(project_member)
     db.commit()
@@ -436,11 +510,32 @@ def update_project(
             detail="Only project owner can update the project"
         )
 
+    old_name = project.name
+    old_description = project.description
+
     if project_data.name is not None:
         project.name = project_data.name
 
     if project_data.description is not None:
         project.description = project_data.description
+
+    log_activity(
+        db=db,
+        workspace_id=project.workspace_id,
+        project_id=project.id,
+        actor_id=current_user.id,
+        action="PROJECT_UPDATED",
+        entity_type="PROJECT",
+        entity_id=project.id,
+        details={
+            "project_name": project.name,
+            "old_name": old_name,
+            "new_name": project.name,
+            "old_description": old_description,
+            "new_description": project.description,
+            "updated_by": current_user.id
+        }
+    )
 
     db.commit()
     db.refresh(project)
@@ -491,6 +586,20 @@ def delete_project(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only project owner can delete the project"
         )
+
+    log_activity(
+        db=db,
+        workspace_id=project.workspace_id,
+        project_id=project.id,
+        actor_id=current_user.id,
+        action="PROJECT_DELETED",
+        entity_type="PROJECT",
+        entity_id=project.id,
+        details={
+            "project_name": project.name,
+            "deleted_by": current_user.id
+        }
+    )
 
     db.delete(project)
     db.commit()
@@ -556,6 +665,22 @@ def leave_project(
     for task in tasks:
         task.assigned_to = None
         task.status = "TODO"
+
+    log_activity(
+        db=db,
+        workspace_id=project.workspace_id,
+        project_id=project.id,
+        actor_id=current_user.id,
+        action="PROJECT_MEMBER_LEFT",
+        entity_type="PROJECT_MEMBER",
+        entity_id=current_user.id,
+        details={
+            "project_name": project.name,
+            "member_id": current_user.id,
+            "member_name": current_user.name,
+            "unassigned_tasks": len(tasks),
+        }
+    )
 
     db.delete(project_member)
     db.commit()

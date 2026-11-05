@@ -127,7 +127,6 @@ export function useWorkspace() {
     try {
       await deleteWorkspaceRequest(workspaceId);
 
-      // Jika item terakhir di halaman dihapus, kembali satu halaman.
       if (workspaces.length === 1 && page > 1) {
         setPage((currentPage) => currentPage - 1);
         return;

@@ -16,6 +16,7 @@ from app.schemas.project_member import (
 from app.schemas.pagination import PaginatedResponse
 from app.utils.pagination import get_pagination
 from app.utils.workspace_permission import get_workspace_member
+from app.services.activity_log import log_activity
 
 router = APIRouter(
     prefix="/projects",
@@ -128,6 +129,25 @@ def add_project_member(
     )
 
     db.add(project_member)
+    db.flush()
+
+    log_activity(
+        db=db,
+        workspace_id=project.workspace_id,
+        project_id=project.id,
+        actor_id=current_user.id,
+        action="PROJECT_MEMBER_ADDED",
+        entity_type="PROJECT_MEMBER",
+        entity_id=user.id,
+        details={
+            "project_name": project.name,
+            "member_id": user.id,
+            "member_name": user.name,
+            "member_email": user.email,
+            "added_by": current_user.id
+        }
+    )
+
     db.commit()
     db.refresh(project_member)
 
@@ -292,6 +312,31 @@ def remove_project_member(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="You cannot remove yourself from the workspace"
         )
+
+    user = db.get(User, user_id)
+
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    log_activity(
+        db=db,
+        workspace_id=project.workspace_id,
+        project_id=project.id,
+        actor_id=current_user.id,
+        action="PROJECT_MEMBER_REMOVED",
+        entity_type="PROJECT_MEMBER",
+        entity_id=user.id,
+        details={
+            "project_name": project.name,
+            "member_id": user.id,
+            "member_name": user.name,
+            "member_email": user.email,
+            "removed_by": current_user.id
+        }
+    )
 
     db.delete(project_member)
     db.commit()

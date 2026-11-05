@@ -16,12 +16,13 @@ import {
 
 import { useNavigate } from "react-router-dom";
 
+import ActivityTimeline from "../../components/activity/ActivityTimeline";
+
 import { useAuth } from "../../contexts/AuthContext";
 import { useDashboard } from "../../hooks/useDashboard";
 
 import {
   formatProjectDate,
-  getInitials,
   getProjectHealth,
   getProjectHealthLabel,
 } from "../../utils/project";
@@ -32,7 +33,6 @@ import type { TaskSummary } from "../../types/task";
 import styles from "./Dashboard.module.css";
 
 const PROJECT_COLORS = ["indigo", "blue", "green", "orange"] as const;
-const ACTIVITY_COLORS = ["purple", "blue", "orange"] as const;
 
 const TASK_STATUS_LABELS: Record<TaskSummary["status"], string> = {
   TODO: "To Do",
@@ -98,7 +98,9 @@ const Dashboard = () => {
     completedTaskTotal,
     pendingMyTasks,
     totalProjectTasks,
-    recentTasks,
+    recentActivities,
+    activitiesLoading,
+    activitiesError,
     loading,
     error,
     reload,
@@ -343,61 +345,27 @@ const Dashboard = () => {
           <div className={styles.panelHeader}>
             <div>
               <h2>Aktivitas Terbaru</h2>
-              <p>Task terbaru dari project kamu.</p>
+              <p>Jejak aktivitas terbaru di workspace utama kamu.</p>
             </div>
           </div>
 
-          {recentTasks.length === 0 ? (
-            <div className={styles.emptyPanel}>
-              <ListTodo size={24} />
-              <h3>Belum ada aktivitas</h3>
-              <p>Task terbaru akan muncul di sini.</p>
-            </div>
-          ) : (
-            <div className={styles.activityList}>
-              {recentTasks.map((task, index) => {
-                const actor =
-                  task.assignee_name ??
-                  task.creator_name ??
-                  "Task";
-                const color =
-                  ACTIVITY_COLORS[index % ACTIVITY_COLORS.length];
-
-                return (
-                  <article
-                    className={styles.activityItem}
-                    key={task.id}
-                  >
-                    <div
-                      className={`${styles.activityAvatar} ${
-                        styles[color]
-                      }`}
-                    >
-                      {getInitials(actor)}
-                    </div>
-
-                    <div className={styles.activityContent}>
-                      <p>
-                        <strong>{task.title}</strong> di{" "}
-                        <span>{task.project_name}</span>
-                      </p>
-
-                      <time>
-                        {formatRelativeTime(task.updated_at)}
-                      </time>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          )}
+          <ActivityTimeline
+            activities={recentActivities}
+            loading={activitiesLoading}
+            error={activitiesError}
+            onRetry={() => void reload()}
+            compact
+            showWorkspace
+            emptyTitle="Belum ada aktivitas"
+            emptyDescription="Aktivitas terbaru akan muncul di sini."
+          />
 
           <button
             type="button"
             className={styles.activityButton}
-            onClick={() => navigate("/tasks")}
+            onClick={() => navigate("/activity")}
           >
-            Lihat semua task
+            Lihat semua aktivitas
             <ArrowRight size={16} />
           </button>
         </aside>

@@ -242,3 +242,22 @@ export async function rejectWorkspaceRequest(
     { method: "PATCH" },
   );
 }
+
+export async function getAllWorkspaces(): Promise<Workspace[]> {
+  const workspaces: Workspace[] = [];
+  let page = 1;
+  let totalPages = 1;
+
+  do {
+    const result = await getWorkspaces({
+      page,
+      pageSize: 100,
+    });
+
+    workspaces.push(...result.items);
+    totalPages = result.total_pages;
+    page += 1;
+  } while (page <= totalPages);
+
+  return workspaces;
+}

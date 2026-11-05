@@ -16,6 +16,7 @@ from app.schemas.pagination import PaginatedResponse
 from app.dependencies.auth import get_current_user
 from app.utils.workspace_permission import get_workspace_member
 from app.utils.pagination import get_pagination
+from app.services.activity_log import log_activity
 
 VALID_TASK_STATUSES = {"TODO", "IN_PROGRESS", "DONE"}
 
@@ -114,6 +115,43 @@ def create_task(
     )
 
     db.add(task)
+    db.flush()
+
+    log_activity(
+        db=db,
+        workspace_id=project.workspace_id,
+        project_id=project.id,
+        task_id=task.id,
+        actor_id=current_user.id,
+        action="TASK_CREATED",
+        entity_type="TASK",
+        entity_id=task.id,
+        details={
+            "task_title": task.title,
+            "created_by": current_user.id,
+            "assigned_to": task.assigned_to,
+            "status": task.status,
+        }
+    )
+
+    if task.assigned_to is not None:
+        log_activity(
+            db=db,
+            workspace_id=project.workspace_id,
+            project_id=project.id,
+            task_id=task.id,
+            actor_id=current_user.id,
+            action="TASK_ASSIGNED",
+            entity_type="TASK",
+            entity_id=task.id,
+            details={
+                "task_title": task.title,
+                "assigned_to": task.assigned_to,
+                "assigned_by": current_user.id,
+                "source": "TASK_CREATION"
+            }
+        )
+
     db.commit()
     db.refresh(task)
 
@@ -297,6 +335,10 @@ def update_task(
             detail="Task not found"
         )
 
+    old_title = task.title
+    old_description = task.description
+    old_status = task.status
+
     project = db.scalar(
         select(Project).where(
             Project.id == task.project_id
@@ -368,10 +410,133 @@ def update_task(
     if task_data.description is not None:
         task.description = task_data.description
 
+    if task.title != old_title or task.description != old_description:
+        log_activity(
+            db=db,
+            workspace_id=project.workspace_id,
+            project_id=project.id,
+            task_id=task.id,
+            actor_id=current_user.id,
+            action="TASK_UPDATED",
+            entity_type="TASK",
+            entity_id=task.id,
+            details={
+                "old_title": old_title,
+                "new_title": task.title,
+                "old_description": old_description,
+                "new_description": task.description,
+                "updated_by": current_user.id,
+            }
+        )
+
+    if task.status != old_status:
+        log_activity(
+            db=db,
+            workspace_id=project.workspace_id,
+            project_id=project.id,
+            task_id=task.id,
+            actor_id=current_user.id,
+            action="TASK_STATUS_UPDATED",
+            entity_type="TASK",
+            entity_id=task.id,
+            details={
+                "task_title": task.title,
+                "old_status": old_status,
+                "new_status": task.status,
+                "changed_by": current_user.id
+            }
+        )
+
     db.commit()
     db.refresh(task)
 
     return task
+
+@router.delete(
+        "/task/{task_id}",
+        status_code=status.HTTP_200_OK
+)
+def delete_task(
+    task_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    task = db.scalar(
+        select(Task).where(
+            Task.id == task_id
+        )
+    )
+
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Task not found"
+        )
+
+    project = db.scalar(
+        select(Project).where(
+            Project.id == task.project_id
+        )
+    )
+
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found"
+        )
+
+    if project.status != "ACTIVE":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Project is not active"
+        )
+
+    workspace_member = get_workspace_member(
+        db=db,
+        workspace_id=project.workspace_id,
+        user_id=current_user.id
+    )
+
+    if not workspace_member:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not a member of this workspace"
+        )
+
+    is_workspace_owner = workspace_member.role == "OWNER"
+    is_project_owner = project.owner_id == current_user.id
+
+    if not (is_workspace_owner or is_project_owner):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only workspace owner or project owner can delete tasks"
+        )
+
+    log_activity(
+        db=db,
+        workspace_id=project.workspace_id,
+        project_id=project.id,
+        task_id=task.id,
+        actor_id=current_user.id,
+        action="TASK_DELETED",
+        entity_type="TASK",
+        entity_id=task.id,
+        details={
+            "task_title": task.title,
+            "task_description": task.description,
+            "assigned_to": task.assigned_to,
+            "status": task.status,
+            "deleted_by": current_user.id
+        }
+    )
+
+    db.delete(task)
+    db.commit()
+
+    return {
+        "message": "Task deleted successfully",
+        "task_id": task_id
+    }
 
 @router.post(
     "/tasks/{task_id}/checklist",
@@ -439,6 +604,24 @@ def create_task_checklist(
     )
 
     db.add(checklist)
+    db.flush()
+
+    log_activity(
+        db=db,
+        workspace_id=project.workspace_id,
+        project_id=project.id,
+        task_id=task.id,
+        actor_id=current_user.id,
+        action="TASK_CHECKLIST_CREATION",
+        entity_type="TASK_CHECKLIST",
+        entity_id=checklist.id,
+        details={
+            "task_title": task.title,
+            "checklist_title": checklist.title,
+            "created_by": current_user.id
+        }
+    )
+
     db.commit()
     db.refresh(checklist)
 
@@ -600,6 +783,9 @@ def toggle_task_checklist(
             detail="Only the assigned user can update checklist"
         )
 
+    old_checklist_status = checklist.is_completed,
+    old_task_status = task.status
+
     checklist.is_completed = not checklist.is_completed
 
     db.flush()
@@ -616,6 +802,24 @@ def toggle_task_checklist(
         task.status = "DONE"
     elif task.status == "DONE":
         task.status = "IN_PROGRESS"
+
+    log_activity(
+        db=db,
+        workspace_id=project.workspace_id,
+        project_id=project.id,
+        task_id=task.id,
+        actor_id=current_user.id,
+        action="TASK_CHECKLIST_TOGGLED",
+        entity_type="TASK_CHECKLIST",
+        entity_id=checklist.id,
+        details={
+            "task_title": task.title,
+            "checklist_title": checklist.title,
+            "old_completed": old_checklist_status,
+            "new_completed": checklist.is_completed,
+            "changed_by": current_user.id,
+        }
+    )
 
     db.commit()
     db.refresh(checklist)
@@ -699,8 +903,44 @@ def claim_task(
             detail="Completed task cannot be claimed"
         )
 
+    old_status = task.status
+
     task.assigned_to = current_user.id
     task.status = "IN_PROGRESS"
+
+    log_activity(
+        db=db,
+        workspace_id=project.workspace_id,
+        project_id=project.id,
+        task_id=task.id,
+        actor_id=current_user.id,
+        action="TASK_ASSIGNED",
+        entity_type="TASK",
+        entity_id=task.id,
+        details={
+            "task_title": task.title,
+            "assigned_to": current_user.id,
+            "source": "CLAIM",
+        }
+    )
+
+    if old_status != task.status:
+        log_activity(
+            db=db,
+            workspace_id=project.workspace_id,
+            project_id=project.id,
+            task_id=task.id,
+            actor_id=current_user.id,
+            action="TASK_STATUS_CHANGED",
+            entity_type="TASK",
+            entity_id=task.id,
+            details={
+                "task_title": task.title,
+                "old_status": old_status,
+                "new_status": task.status,
+                "source": "CLAIM",
+            }
+        )
 
     db.commit()
     db.refresh(task)
@@ -780,6 +1020,22 @@ def unclaim_task(
 
     task.assigned_to = None
     task.status = "TODO"
+
+    log_activity(
+        db=db,
+        workspace_id=project.workspace_id,
+        project_id=project.id,
+        task_id=task.id,
+        actor_id=current_user.id,
+        action="TASK_UNCLAIMED",
+        entity_type="TASK",
+        entity_id=task.id,
+        details={
+            "task_title": task.title,
+            "previous_assignee": current_user.id,
+            "unclaimed_by": current_user.id,
+        }
+    )
 
     db.commit()
     db.refresh(task)
